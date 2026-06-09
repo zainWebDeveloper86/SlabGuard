@@ -98,7 +98,7 @@ const Signup = () => {
               </label>
               <input
                 type="text"
-                placeholder="Enter your username"
+                placeholder="Enter a unique username for yourself"
                 className="w-full px-4 py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-white dark:bg-[#1E293B] border border-gray-200 dark:border-gray-700 text-[#1A1A1A] dark:text-white outline-none focus:border-brand-blue transition-all input-focus"
                 value={registerForm.username}
                 onChange={(e) =>
