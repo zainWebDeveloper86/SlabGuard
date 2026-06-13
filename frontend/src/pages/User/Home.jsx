@@ -20,52 +20,22 @@ import {
 
 import { MeterStatusCard } from "../../components/Common";
 import { Link } from "react-router-dom";
-
-// 2. Dummy Data (Missing - Chart ko chalane ke liye zaroori hai)
-const usageData = [
-  { date: "1", units: 4 },
-  { date: "2", units: 6 },
-  { date: "3", units: 8 },
-  { date: "4", units: 5 },
-  { date: "5", units: 9 },
-  { date: "6", units: 7 },
-  { date: "7", units: 10 },
-];
+import { useAuth } from "../../hooks/useAuth";
+import { usageData, stats } from "../../constants/staticData";
 
 const Home = () => {
-  const stats = [
-    {
-      title: "Current Units",
-      value: "142.5",
-      unit: "kWh",
-      icon: <LuZap size={20} />,
-      color: "text-blue-500",
-      bg: "bg-blue-50 dark:bg-blue-500/10",
-    },
-    {
-      title: "Predicted Bill",
-      value: "₨ 3,850",
-      unit: "Est.",
-      icon: <LuChartLine size={20} />,
-      color: "text-emerald-500",
-      bg: "bg-emerald-50 dark:bg-emerald-500/10",
-    },
-    {
-      title: "Slab Status",
-      value: "Protective",
-      unit: "Safe",
-      icon: <LuLightbulb size={20} />,
-      color: "text-amber-500",
-      bg: "bg-amber-50 dark:bg-amber-500/10",
-    },
-  ];
+  const { loading, user } = useAuth();
 
   return (
     <div className="p-4 md:p-8 space-y-10 animate-in fade-in duration-700">
       {/* ================= HEADER ================= */}
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl md:text-4xl font-black text-gray-900 dark:text-white tracking-tight">
-          Welcome back, <span className="text-brand-blue">Zain</span> 👋
+          Welcome back,{" "}
+          <span className="text-brand-blue">
+            {!loading ? user?.fullName : "Hi User"}
+          </span>{" "}
+          👋
         </h1>
         <p className="text-gray-500 dark:text-gray-400 font-medium">
           Here’s what’s happening with your energy consumption today.
@@ -76,20 +46,22 @@ const Home = () => {
       <MeterStatusCard />
 
       {/* NEW: PEAK HOUR COUNTDOWN (Proposal Module 2) */}
-      <div className="bg-amber-100/50 dark:bg-amber-900/20 border-2 border-dashed border-amber-200 dark:border-amber-800 p-4 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-3 h-3 bg-amber-500 rounded-full animate-ping"></div>
-          <p className="text-sm font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest">
-            Next Peak Window: 6:00 PM – 10:00 PM
-          </p>
+      {user?.meterType === "single" ? null : (
+        <div className="bg-amber-100/50 dark:bg-amber-900/20 border-2 border-dashed border-amber-200 dark:border-amber-800 p-4 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-3 h-3 bg-amber-500 rounded-full animate-ping"></div>
+            <p className="text-sm font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest">
+              Next Peak Window: 6:00 PM – 10:00 PM
+            </p>
+          </div>
+          <div className="text-xs font-bold text-gray-500 dark:text-gray-400">
+            Starts in:{" "}
+            <span className="bg-white dark:bg-gray-800 px-3 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white ml-2">
+              03h 45m 12s
+            </span>
+          </div>
         </div>
-        <div className="text-xs font-bold text-gray-500 dark:text-gray-400">
-          Starts in:{" "}
-          <span className="bg-white dark:bg-gray-800 px-3 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white ml-2">
-            03h 45m 12s
-          </span>
-        </div>
-      </div>
+      )}
 
       {/* ================= STATS GRID ================= */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -434,7 +406,7 @@ const Home = () => {
               </div>
             </div>
             <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-6">
-              High temperature detected! **Prophet AI** predicts a load spike.
+              High temperature detected! AI predicts a load spike.
               You are likely to finish at
               <span className="text-red-500 font-bold"> 212 units </span>
               unless you reduce AC usage.

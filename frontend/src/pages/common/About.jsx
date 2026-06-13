@@ -59,7 +59,7 @@ const About = () => {
             >
               <LuSparkles className="w-3 h-3" />
               {isDashboard
-                ? `Welcome to the Mission, ${user?.username || "Partner"}`
+                ? "Welcome to the Mission"
                 : "Our Story"}
             </div>
 

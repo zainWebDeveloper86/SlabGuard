@@ -88,7 +88,7 @@ const Startup = () => {
           {/* Buttons */}
           <div className="flex flex-col sm:flex-row justify-center gap-5">
             <Link
-              to="/login"
+              to="/register"
               className="group relative bg-white text-brand-blue px-10 py-4 rounded-full font-black text-lg hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 overflow-hidden"
             >
               <span className="relative z-10">Start Saving</span>

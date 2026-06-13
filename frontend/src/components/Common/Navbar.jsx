@@ -19,10 +19,8 @@ const Navbar = () => {
   if (!user?.isLogin) {
     return (
       <nav className="sticky top-0 z-50 backdrop-blur-xl bg-white/70 dark:bg-[#0B1220]/70 border-b border-gray-100 dark:border-gray-800">
-        
         {/* TOP BAR */}
         <div className="max-w-7xl mx-auto px-6 h-18 flex items-center justify-between">
-          
           {/* Logo */}
           <Link to="/" className="flex items-center group">
             <img
@@ -58,46 +56,76 @@ const Navbar = () => {
           </div>
 
           {/* RIGHT SECTION */}
-          <div className="flex items-center gap-3">
-            
-            {/* Theme Toggle */}
-            <button
-              onClick={toggleTheme}
-              className="outline-none cursor-pointer p-2 rounded-full text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200"
-            >
-              {dark ? (
-                <LuSun className="w-5 h-5 hover:rotate-90 transition" />
-              ) : (
-                <LuMoon className="w-5 h-5 hover:rotate-12 transition" />
-              )}
-            </button>
 
-            {/* Desktop Button */}
-            <Link
-              to="/login"
-              className="hidden md:block relative px-5 py-2.5 rounded-full bg-brand-gradient text-white font-bold overflow-hidden group"
-            >
-              <span className="relative z-10">Get Started</span>
-              <span className="absolute inset-0 bg-white/20 -translate-x-full group-hover:translate-x-0 transition duration-700"></span>
-            </Link>
+          {/*for Desktop*/}
+          <div className="hidden md:block">
+            <div className="flex items-center gap-4">
+              {/* Theme Toggle */}
+              <button
+                onClick={toggleTheme}
+                className="relative outline-none cursor-pointer p-2 rounded-full text-gray-500 hover:text-white overflow-hidden group transition"
+              >
+                <span
+                  className="absolute inset-0 bg-brand-gradient 
+                    opacity-0 group-hover:opacity-100 transition duration-300"
+                />
+                {dark ? (
+                  <LuSun className="w-5 h-5 group-hover:rotate-90 transition relative" />
+                ) : (
+                  <LuMoon className="w-5 h-5 group-hover:rotate-12 transition relative" />
+                )}
+              </button>
 
-            {/* MOBILE MENU BUTTON */}
-            <button
-              onClick={() => setOpenMenu(!openMenu)}
-              className="md:hidden cursor-pointer p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition"
-            >
-              {openMenu ? <LuX className="w-5 h-5 hover:rotate-90 transition" /> : <RiMenu4Fill className="w-5 h-5 hover:rotate-12 transition" />}
-            </button>
+              {/* Button for login */}
+
+              <Link
+                to="/login"
+                className="relative px-5 py-2.5 rounded-full bg-brand-gradient text-white font-bold overflow-hidden group"
+              >
+                <span className="relative z-10">Get Started</span>
+                <span className="absolute inset-0 bg-white/20 -translate-x-full group-hover:translate-x-0 transition duration-700"></span>
+              </Link>
+            </div>
+          </div>
+
+          {/*for mobile*/}
+          <div className="md:hidden">
+            <div className="flex items-center  min-[400px]:gap-2 bg-brand-blue rounded-full">
+              {/* Theme Toggle */}
+              <button
+                onClick={toggleTheme}
+                className="outline-none cursor-pointer p-2 rounded-full text-gray-300 transition-all duration-200"
+              >
+                {dark ? (
+                  <LuSun className="w-5 h-5 hover:rotate-90 transition" />
+                ) : (
+                  <LuMoon className="w-5 h-5 hover:rotate-12 transition" />
+                )}
+              </button>
+
+              {/* MOBILE MENU BUTTON */}
+              <button
+                onClick={() => setOpenMenu(!openMenu)}
+                className="cursor-pointer p-2 rounded-full text-gray-300  transition-all duration-200"
+              >
+                {openMenu ? (
+                  <LuX className="w-5 h-5 hover:rotate-90 transition" />
+                ) : (
+                  <RiMenu4Fill className="w-5 h-5 hover:rotate-12 transition" />
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
         {/* MOBILE MENU */}
         {openMenu && (
-          <div className="md:hidden px-6 pb-5 pt-3 space-y-3 
+          <div
+            className="md:hidden px-6 pb-5 pt-3 space-y-3 
           bg-white/10 dark:bg-[#0B1220]/10 
           border-t border-gray-200 dark:border-gray-800
-          animate-in fade-in slide-in-from-top-2 duration-300">
-            
+          animate-in fade-in slide-in-from-top-2 duration-300"
+          >
             {navLinks.map(({ name, path }) => (
               <Link
                 key={name}

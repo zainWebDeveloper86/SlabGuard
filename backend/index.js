@@ -1,7 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import process from 'process';
-// import cors from 'cors';
+import cors from 'cors';
 import { connectionDB } from './config/database.js';
 import authRouter from './routes/auth.routes.js'
 import authMiddleware from './middleware/auth.middleware.js';
@@ -16,7 +16,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
 // cors
-// app.use(cors());
+app.use(cors());
 
 // Middleware for routes
 app.use("/api/auth",authRouter)

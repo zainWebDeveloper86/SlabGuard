@@ -12,7 +12,9 @@ const Topbar = ({ setMobileOpen }) => {
   const { dark, toggleTheme } = useTheme();
   const [open, setOpen] = useState(false);
 
-  const { user, logout } = useAuth();
+  const { user, logout, loading } = useAuth();
+
+  // console.log(user);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -139,19 +141,21 @@ const Topbar = ({ setMobileOpen }) => {
 
           {/* DROPDOWN */}
           {open && (
-            <div className="absolute right-0 mt-3 w-52 rounded-2xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-800 shadow-xl overflow-hidden animate-in slide-in-from-top-2 fade-in duration-200">
+            <div className="absolute right-0 mt-3 min-w-52 grow rounded-2xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-800 shadow-xl overflow-hidden animate-in slide-in-from-top-2 fade-in duration-200">
               <div className="flex flex-row gap-2 items-center px-4 py-3 border-b border-gray-200 dark:border-gray-800 text-gray-800 dark:text-gray-100">
                 <div className="relative">
                   <img
                     src={useravator}
                     alt="user"
-                    className="w-7 h-7 rounded-full object-cover"
+                    className="min-w-7 h-7 rounded-full object-cover"
                   />
                   {/* <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full" /> */}
                 </div>
                 <div className="text-gray-800 dark:text-gray-100">
-                  <p className="text-sm font-medium">Zain</p>
-                  <p className="text-xs text-gray-400">zain@email.com</p>
+                  <p className="text-sm font-medium">
+                    {!loading ? user?.fullName : "Hi User"}
+                  </p>
+                  <p className="text-xs text-gray-400">{!loading ? user?.email : "user@gmail.com"}</p>
                 </div>
               </div>
 

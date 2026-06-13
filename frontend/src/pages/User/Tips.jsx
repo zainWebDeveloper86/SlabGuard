@@ -65,7 +65,7 @@ const Tips = () => {
         </div>
         <div className="bg-amber-50 dark:bg-amber-500/10 p-6 rounded-[30px] border border-amber-100 dark:border-amber-500/20">
           <LuTimer className="text-amber-500 mb-3" size={28} />
-          <h4 className="font-black text-amber-900 dark:text-amber-400">Peak Hours</h4>
+          <h4 className="font-black text-amber-900 dark:text-amber-400">Peak Hours (for Three-Phase)</h4>
           <p className="text-xs text-amber-700 font-bold uppercase">6 PM - 10 PM (Avoid Heavy Load)</p>
         </div>
         <div className="bg-blue-50 dark:bg-blue-500/10 p-6 rounded-[30px] border border-blue-100 dark:border-blue-500/20">
