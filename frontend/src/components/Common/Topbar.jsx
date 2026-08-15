@@ -65,6 +65,11 @@ const Topbar = ({ setMobileOpen }) => {
 
   const pageTitle = findTitleFromMenu(location.pathname, sections);
 
+  const logoutHandler = async () => {
+    await logout();
+    navigate("/login");
+  };
+
   // console.log("Sending state:", { from: location });
 
   return (
@@ -155,7 +160,9 @@ const Topbar = ({ setMobileOpen }) => {
                   <p className="text-sm font-medium">
                     {!loading ? user?.fullName : "Hi User"}
                   </p>
-                  <p className="text-xs text-gray-400">{!loading ? user?.email : "user@gmail.com"}</p>
+                  <p className="text-xs text-gray-400">
+                    {!loading ? user?.email : "user@gmail.com"}
+                  </p>
                 </div>
               </div>
 
@@ -172,10 +179,7 @@ const Topbar = ({ setMobileOpen }) => {
               <div className="border-t border-gray-200 dark:border-gray-800" />
 
               <button
-                onClick={() => {
-                  logout();
-                  navigate("/login");
-                }}
+                onClick={logoutHandler}
                 className="flex flex-row gap-2 items-center w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 cursor-pointer"
               >
                 <LuLogOut size={16} /> <span>Logout</span>

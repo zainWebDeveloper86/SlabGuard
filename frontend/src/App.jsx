@@ -20,7 +20,7 @@ const App = () => {
         }}
       />
 
-      {/* Ye router ko active kar de ga */}
+      {/* activate routing in frontend */}
       <RouterProvider router={router} />
     </>
   );

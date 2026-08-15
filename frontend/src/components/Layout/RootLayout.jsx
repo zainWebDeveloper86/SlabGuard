@@ -4,7 +4,10 @@ import { Navbar, Footer } from "../Common";
 const RootLayout = () => {
   const location = useLocation();
 
-  // ❌ jin pages par navbar/footer hide karna hai
+  // console.log(location);
+  // console.log(location.pathname);
+  
+  // where you want to hide navbar and footer
   const hideLayoutRoutes = ["/login", "/register","/forgot-password","/reset-password"];
 
   const hideLayout = hideLayoutRoutes.includes(location.pathname);

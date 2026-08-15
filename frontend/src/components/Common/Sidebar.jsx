@@ -31,6 +31,11 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
     return currentPath.startsWith(path);
   };
 
+  const logoutHandler = async () => {
+    await logout();
+    navigate("/login");
+  };
+
   return (
     <>
       {/* 📱 Mobile Overlay */}
@@ -141,10 +146,7 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
         {/* 🔹 Logout */}
         <div className="w-full px-3">
           <button
-            onClick={() => {
-              logout();
-              navigate("/login");
-            }}
+            onClick={logoutHandler}
             className="cursor-pointer flex items-center gap-3 px-3 py-2.5 rounded-xl text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
           >
             <LuLogOut size={22} />

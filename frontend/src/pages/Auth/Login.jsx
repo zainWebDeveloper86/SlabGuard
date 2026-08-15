@@ -241,8 +241,15 @@ import { useAuth } from "../../hooks/useAuth";
 import toast from "react-hot-toast";
 import Logo from "../../assets/Frame3.svg";
 import { TypingText } from "../../components/Common";
-import { LuArrowLeft, LuMail, LuLock, LuEye, LuEyeOff, LuUser } from "react-icons/lu";
-import { authBaseUrl } from "../../axios.js";
+import {
+  LuArrowLeft,
+  LuMail,
+  LuLock,
+  LuEye,
+  LuEyeOff,
+  LuUser,
+} from "react-icons/lu";
+import { axiosServerInstance } from "../../axios.js";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -288,31 +295,16 @@ const Login = () => {
     setIsSubmitting(true);
 
     try {
-      const response = await authBaseUrl.post("/login", {
+      const response = await axiosServerInstance.post("/user/login", {
         usernameOREmail,
         password,
       });
 
       if (response.data.success) {
-        const { token, user: userData } = response.data;
-
-        // Store token in localStorage
-        localStorage.setItem("token", token);
-
-        // Update auth context
-        // login({
-        //   isLogin: true,
-        //   ...userData,
-        //   token,
-        // });
-
-        login({
-          token: token,
-          user: userData,
-        });
+        login(response.data.user);
 
         toast.success("Login successful!");
-        if (userData.role === "admin") {
+        if (response.data.user.role === "admin") {
           navigate("/admin", { replace: true });
         } else {
           navigate("/home", { replace: true });

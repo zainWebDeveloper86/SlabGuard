@@ -1,9 +1,9 @@
 import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
 
 const userSchema = new mongoose.Schema(
   {
-    // account related information
-
+    // Account related information
     fullName: {
       type: String,
       required: true,
@@ -60,5 +60,10 @@ const userSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-const Users = mongoose.model("User", userSchema);
-export default Users;
+userSchema.pre("save", async function () {
+  if (!this.isModified("password")) return;
+  this.password = await bcrypt.hash(this.password, 10);
+});
+
+const User = mongoose.model("User", userSchema);
+export default User;

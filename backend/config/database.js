@@ -1,10 +1,13 @@
 import mongoose from "mongoose";
-import process from "process";
-export const connectionDB = async () => {
+
+const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URL);
-    console.log("Connect to database successfully!");
+    const res = await mongoose.connect(process.env.DB_URL);
+    console.log(`MongoDB connected: ${res.connection.host}`);
   } catch (error) {
-    console.log("connection failed to database: ", error.message);
+    console.log(`Database connection failed: ${error.message}`);
+    throw error; // rethrow so index.js's catch actually fires
   }
 };
+
+export default connectDB;

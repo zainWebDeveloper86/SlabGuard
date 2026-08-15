@@ -253,11 +253,12 @@
 // };
 
 // export default Signup;
+
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import toast from "react-hot-toast";
-import { authBaseUrl } from "../../axios.js";
+import { axiosServerInstance } from "../../axios.js";
 import { TypingText } from "../../components/Common";
 import Logo from "../../assets/Frame3.svg";
 import {
@@ -309,19 +310,16 @@ const Signup = () => {
     setIsSubmitting(true);
 
     try {
-      const response = await authBaseUrl.post(
-        "/register",
-        {
-          fullName,
-          username,
-          email,
-          password,
-          role: "user", // default
-        },
-      );
+      const response = await axiosServerInstance.post("/user/register", {
+        fullName,
+        username,
+        email,
+        password,
+        role: "user", // default
+      });
 
       if (response.data.success) {
-          setRegisterForm({
+        setRegisterForm({
           fullName: "",
           username: "",
           email: "",
