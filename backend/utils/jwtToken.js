@@ -23,14 +23,13 @@ const sendToken = (user, statusCode, res, options = {}) => {
     secure: isProduction,
   };
 
-  // strip password before sending user object back
+  // strip/remove password before sending user object back
   const userObj = user.toObject();
   delete userObj.password;
 
   res.status(statusCode).cookie(cookieName, token, cookieOptions).json({
     success: true,
     user: userObj,
-    token,
   });
 };
 

@@ -1,88 +1,68 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
+import { axiosServerInstance } from "../../axios.js";
 import { TypingText } from "../../components/Common";
 import Logo from "../../assets/Frame3.svg";
 import { LuLock, LuCircleCheck, LuEye, LuEyeOff } from "react-icons/lu";
 
 const ResetPassword = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get("token");
+
   const [showPass, setShowPass] = useState(false);
-  //   const [searchParams] = useSearchParams();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     password: "",
     confirmPassword: "",
   });
 
-  const handleSubmit = (e) => {
+  // No token in the URL at all → this page was reached incorrectly,
+  // send them back to request a fresh link instead of showing a dead form.
+  useEffect(() => {
+    if (!token) {
+      toast.error("Invalid access. No reset token found.");
+      navigate("/forgot-password", { replace: true });
+    }
+  }, [token, navigate]);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (formData.password.length < 8) {
-      return toast.error("Password must be at least 8 characters");
+    if (formData.password.length < 6) {
+      return toast.error("Password must be at least 6 characters");
     }
     if (formData.password !== formData.confirmPassword) {
       return toast.error("Passwords do not match!");
     }
 
-    // Backend API Call (e.g., Axios.post('/api/reset-password', { token, password }))
-    toast.success("Password reset successfully! Redirecting to login...");
-
-    setTimeout(() => {
-      navigate("/login");
-    }, 2000);
+    setIsSubmitting(true);
+    try {
+      const res = await axiosServerInstance.patch(
+        `/user/reset-password?token=${token}`,
+        {
+          password: formData.password,
+          confirmPassword: formData.confirmPassword,
+        },
+      );
+      if (res.data.success) {
+        toast.success(res.data.message);
+        setTimeout(() => navigate("/login"), 1500);
+      }
+    } catch (error) {
+      // Covers both "expired" and "invalid" cases — backend already
+      // distinguishes these in its message, we just surface it.
+      toast.error(error.response?.data?.message || "Reset failed, try again");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const paraText =
     "Almost there! Create a strong new password to secure your SlabGuard account.";
 
-  //   const [isVerifying, setIsVerifying] = useState(true); // Shuru mein loading dikhayenge
-  //   const [isValidToken, setIsValidToken] = useState(false);
-
-  //   const token = searchParams.get("token");
-
-  //   useEffect(() => {
-  //     const verifyToken = async () => {
-  //       if (!token) {
-  //         toast.error("Invalid access. No token found.");
-  //         navigate("/forgot-password");
-  //         return;
-  //       }
-
-  //       try {
-  //         // Backend API call to verify token
-  //         // const response = await axios.get(`/api/auth/verify-token?token=${token}`);
-
-  //         // Farz karein backend ne kaha "Token OK hai"
-  //         const isOk = true; // Temporary placeholder
-
-  //         if (isOk) {
-  //           setIsValidToken(true);
-  //         } else {
-  //           toast.error("Token has expired or is invalid.");
-  //           navigate("/forgot-password");
-  //         }
-  //       } catch (error) {
-  //         toast.error("Something went wrong. Try again.", error);
-  //         navigate("/forgot-password");
-  //       } finally {
-  //         setIsVerifying(false); // Verification mukammal
-  //       }
-  //     };
-
-  //     verifyToken();
-  //   }, [token, navigate]);
-
-  //   // Agar verify ho raha hai to loading spinner dikhayein
-  //   if (isVerifying) {
-  //     return (
-  //       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-[#0B1220]">
-  //         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-brand-blue"></div>
-  //         <p className="ml-4 dark:text-white font-bold italic">
-  //           Verifying Token...
-  //         </p>
-  //       </div>
-  //     );
-  //   }
+  if (!token) return null; // effect above already redirects
 
   return (
     <div className="min-h-screen w-full flex flex-col md:flex-row bg-white dark:bg-[#0B1220] transition-colors duration-300">
@@ -105,7 +85,7 @@ const ResetPassword = () => {
             Set New Password
           </h2>
           <p className="text-gray-500 dark:text-gray-400 mb-8 text-left text-sm sm:text-base">
-            Your identity has been verified. Please choose a strong password.
+            Choose a strong new password for your account.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -118,7 +98,7 @@ const ResetPassword = () => {
                 <LuLock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type={showPass ? "text" : "password"}
-                  placeholder="Min. 8 characters"
+                  placeholder="Min. 6 characters"
                   className="w-full pl-12 pr-12 py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-white dark:bg-[#1E293B] border border-gray-200 dark:border-gray-700 text-[#1A1A1A] dark:text-white outline-none focus:border-brand-blue transition-all"
                   value={formData.password}
                   onChange={(e) =>
@@ -144,7 +124,7 @@ const ResetPassword = () => {
               <div className="relative">
                 <LuLock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
-                  type="password"
+                  type={showPass ? "text" : "password"}
                   placeholder="Repeat your password"
                   className="w-full pl-12 pr-4 py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-white dark:bg-[#1E293B] border border-gray-200 dark:border-gray-700 text-[#1A1A1A] dark:text-white outline-none focus:border-brand-blue transition-all"
                   value={formData.confirmPassword}
@@ -156,16 +136,25 @@ const ResetPassword = () => {
                   }
                   required
                 />
+                {/* <button
+                  type="button"
+                  onClick={() => setShowPass(!showPass)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-brand-blue transition"
+                >
+                  {showPass ? <LuEyeOff size={20} /> : <LuEye size={20} />}
+                </button> */}
               </div>
             </div>
 
             {/* Submit Button */}
             <button
               type="submit"
-              className="relative overflow-hidden w-full py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-brand-gradient text-white font-bold shadow-lg group transition-all duration-300 hover:scale-[1.02] hover:shadow-xl cursor-pointer"
+              disabled={isSubmitting}
+              className="relative overflow-hidden w-full py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-brand-gradient text-white font-bold shadow-lg group transition-all duration-300 hover:scale-[1.02] hover:shadow-xl cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
             >
               <span className="relative z-10 flex items-center justify-center gap-2">
-                Update Password <LuCircleCheck size={18} />
+                {isSubmitting ? "Updating..." : "Update Password"}{" "}
+                <LuCircleCheck size={18} />
               </span>
               <span className="absolute top-0 left-0 h-full w-full bg-white/20 transform -translate-x-full group-hover:translate-x-0 transition-transform duration-700"></span>
             </button>

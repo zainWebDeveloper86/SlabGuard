@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import toast from "react-hot-toast";
+import { axiosServerInstance } from "../../axios.js";
 import { TypingText } from "../../components/Common";
 import Logo from "../../assets/Frame3.svg";
 import { LuArrowLeft, LuMail } from "react-icons/lu";
@@ -8,17 +9,25 @@ import { LuArrowLeft, LuMail } from "react-icons/lu";
 const ForgotPassword = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!email) return toast.error("Please enter your email");
 
-    // Backend logic yahan aayegi (e.g., Axios post request)
-    console.log("Password reset link sent to:", email);
-    
-    setIsSubmitted(true);
-    toast.success("Reset link sent to your email!");
+    setIsSubmitting(true);
+    try {
+      const res = await axiosServerInstance.post("/user/forgot-password", { email });
+      if (res.data.success) {
+        setIsSubmitted(true);
+        toast.success(res.data.message);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Something went wrong");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const paraText = "Don't worry! It happens. Enter your email and we'll help you get back on track.";
@@ -76,9 +85,12 @@ const ForgotPassword = () => {
 
                 <button
                   type="submit"
-                  className="relative overflow-hidden w-full py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-brand-gradient text-white font-bold shadow-lg group transition-all duration-300 hover:scale-[1.02] hover:shadow-xl cursor-pointer"
+                  disabled={isSubmitting}
+                  className="relative overflow-hidden w-full py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-brand-gradient text-white font-bold shadow-lg group transition-all duration-300 hover:scale-[1.02] hover:shadow-xl cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                  <span className="relative z-10">Send Reset Link</span>
+                  <span className="relative z-10">
+                    {isSubmitting ? "Sending..." : "Send Reset Link"}
+                  </span>
                   <span className="absolute top-0 left-0 h-full w-full bg-white/20 transform -translate-x-full group-hover:translate-x-0 transition-transform duration-700"></span>
                 </button>
               </form>
@@ -91,7 +103,7 @@ const ForgotPassword = () => {
               </div>
               <h2 className="text-3xl font-black dark:text-white mb-2 italic">Check Your Email</h2>
               <p className="text-gray-500 dark:text-gray-400 mb-8">
-                We've sent a password reset link to <br/>
+                If that email is registered, we've sent a reset link to <br/>
                 <span className="font-bold text-brand-blue">{email}</span>
               </p>
               <button 

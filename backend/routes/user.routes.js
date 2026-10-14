@@ -4,14 +4,31 @@ import {
   loginUser,
   getUser,
   logoutUser,
+  completeApplication,
+  updateProfile,
+  changePassword,
+  updateAvatar,
+  regenerateDeviceKey,
+  forgotPassword,
+  resetPassword,
 } from "../controllers/user.controller.js";
 import { isAuthenticated } from "../middleware/auth.middleware.js";
+import upload from "../multer.js";
 
 const router = express.Router();
 
 router.post("/register", registerUser);
 router.post("/login", loginUser);
+router.post("/forgot-password", forgotPassword);
+router.patch("/reset-password", resetPassword); // token comes from query string
 router.get("/me", isAuthenticated, getUser);
-router.post("/logout", isAuthenticated, logoutUser);
+router.patch("/application", isAuthenticated, completeApplication);
+router.post("/logout", logoutUser);
+
+router.patch("/profile", isAuthenticated, updateProfile);
+router.patch("/avatar", isAuthenticated, upload.single("avatar"), updateAvatar);
+router.patch("/change-password", isAuthenticated, changePassword);
+
+router.post("/device-key/regenerate", isAuthenticated, regenerateDeviceKey);
 
 export default router;

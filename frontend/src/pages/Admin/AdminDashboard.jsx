@@ -1,4 +1,4 @@
-// import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   AreaChart,
   Area,
@@ -7,94 +7,115 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  Cell,
   PieChart,
   Pie,
+  Cell,
   Legend,
 } from "recharts";
-
 import {
   LuUsers,
-  LuBrain,
+  LuZap,
   LuTriangleAlert,
   LuActivity,
-  LuZap,
   LuTrendingUp,
   LuMegaphone,
   LuArrowRight,
+  LuLink,
 } from "react-icons/lu";
 import { useNavigate } from "react-router-dom";
-
-// Dummy Data for Admin Overview
-const growthData = [
-  { month: "Jan", users: 400 },
-  { month: "Feb", users: 700 },
-  { month: "Mar", users: 1200 },
-  { month: "Apr", users: 1850 },
-];
-
-const featureUsage = [
-  { name: "OCR Scan", value: 45, color: "#3b82f6" },
-  { name: "Prediction", value: 35, color: "#10b981" },
-  { name: "Tariff Check", value: 20, color: "#f59e0b" },
-];
-
-const slabDistribution = [
-  { name: "Protective", value: 65, color: "#10b981" }, // Emerald
-  { name: "Non-Protective", value: 35, color: "#f43f5e" }, // Rose
-];
+import toast from "react-hot-toast";
+import { axiosServerInstance } from "../../axios.js";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const [stats, setStats] = useState(null);
+  const [activity, setActivity] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchAdminData = async () => {
+      try {
+        const [statsRes, activityRes] = await Promise.all([
+          axiosServerInstance.get("/admin/stats"),
+          axiosServerInstance.get("/admin/activity"),
+        ]);
+        if (statsRes.data.success) setStats(statsRes.data.stats);
+        if (activityRes.data.success) setActivity(activityRes.data.activity);
+      } catch (error) {
+        toast.error(
+          error.response?.data?.message || "Failed to load admin data",
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchAdminData();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="p-8 text-center text-gray-400 font-bold">
+        Loading dashboard...
+      </div>
+    );
+  }
+
+  const slabPieData = stats
+    ? [
+        {
+          name: "Protected",
+          value: stats.slabDistribution.protected,
+          color: "#10b981",
+        },
+        {
+          name: "Non-Protected",
+          value: stats.slabDistribution.nonProtected,
+          color: "#f43f5e",
+        },
+      ]
+    : [];
+
   return (
     <div className="p-4 md:p-8 space-y-8 animate-in fade-in duration-700">
-      {/* ================= HEADER ================= */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">
             System <span className="text-brand-blue">Overview</span>
           </h1>
           <p className="text-gray-500 dark:text-gray-400 font-medium">
-            SlabGuard real-time monitoring and administrative control.
+            SlabGuard monitoring and administrative control.
           </p>
-        </div>
-        <div className="flex gap-3">
-          <div className="px-4 py-2 bg-emerald-500/10 text-emerald-600 rounded-xl text-xs font-bold border border-emerald-500/20 flex items-center gap-2">
-            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-            AI SERVER: ONLINE
-          </div>
         </div>
       </div>
 
-      {/* ================= STATS ================= */}
+      {/* STATS — all real now */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
           {
             title: "Total Users",
-            value: "2,481",
+            value: stats.totalUsers,
             icon: <LuUsers />,
             color: "text-blue-500",
             bg: "bg-blue-50",
           },
           {
-            title: "Avg Monthly Bill",
-            value: "₨ 4,820",
+            title: "Meter Linked",
+            value: stats.linkedUsers,
+            icon: <LuLink />,
+            color: "text-emerald-500",
+            bg: "bg-emerald-50",
+          },
+          {
+            title: "Avg Latest Bill",
+            value: `₨ ${stats.avgLatestBill}`,
             icon: <LuZap />,
             color: "text-yellow-500",
             bg: "bg-yellow-50",
           },
           {
-            title: "AI Scans",
-            value: "842",
-            icon: <LuBrain />,
-            color: "text-purple-500",
-            bg: "bg-purple-50",
-          },
-          {
-            title: "Urgent Tickets",
-            value: "07",
+            title: "Non-Protected",
+            value: stats.slabDistribution.nonProtected,
             icon: <LuTriangleAlert />,
             color: "text-rose-500",
             bg: "bg-rose-50",
@@ -109,7 +130,6 @@ const AdminDashboard = () => {
                 {card.icon}
               </div>
             </div>
-
             <p className="text-sm font-bold text-gray-500 dark:text-gray-400">
               {card.title}
             </p>
@@ -120,224 +140,152 @@ const AdminDashboard = () => {
         ))}
       </div>
 
-      {/* ================= CHARTS SECTION ================= */}
+      {/* SLAB DISTRIBUTION — real, from latest bill per user */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* USER GROWTH */}
         <div className="lg:col-span-8 bg-white dark:bg-[#1E293B] p-8 rounded-[40px] border border-gray-100 dark:border-gray-800 shadow-sm">
           <h3 className="text-xl font-black mb-6 dark:text-white flex items-center gap-2">
-            <LuTrendingUp className="text-blue-500" />
-            User Growth
+            <LuActivity className="text-brand-blue" /> Recent System Activity
           </h3>
-
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={growthData}>
-                <defs>
-                  <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                  opacity={0.5}
-                />
-                <XAxis dataKey="month" />
-                <YAxis hide />
-
-                <Tooltip />
-
-                <Area
-                  type="monotone"
-                  dataKey="users"
-                  stroke="#3b82f6"
-                  strokeWidth={3}
-                  fill="url(#colorUsers)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-gray-50 dark:bg-gray-800 text-gray-400 text-[10px] uppercase tracking-widest font-black">
+                <tr>
+                  <th className="px-4 py-3">Event</th>
+                  <th className="px-4 py-3">Actor</th>
+                  <th className="px-4 py-3 text-right">When</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
+                {activity.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={3}
+                      className="px-4 py-8 text-center text-gray-400 font-bold"
+                    >
+                      No activity yet.
+                    </td>
+                  </tr>
+                ) : (
+                  activity.map((a, i) => (
+                    <tr
+                      key={i}
+                      className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition"
+                    >
+                      <td className="px-4 py-4 text-sm font-bold text-gray-800 dark:text-gray-200">
+                        {a.event}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-gray-500">
+                        {a.actor}
+                      </td>
+                      <td className="px-4 py-4 text-right text-xs text-gray-400">
+                        {new Date(a.time).toLocaleString("en-GB", {
+                          day: "2-digit",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 
         <div className="lg:col-span-4 bg-white dark:bg-[#1E293B] p-8 rounded-[45px] border border-gray-100 dark:border-gray-800 shadow-sm">
           <h3 className="text-xl font-black mb-6 dark:text-white text-center">
-            User Status
+            Slab Distribution
           </h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={slabDistribution}
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={8}
-                  dataKey="value"
-                >
-                  {slabDistribution.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend
-                  iconType="circle"
-                  wrapperStyle={{
-                    paddingTop: "20px",
-                    fontSize: "12px",
-                    fontWeight: "bold",
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <p className="text-[11px] text-center text-gray-400 mt-4 leading-relaxed font-medium">
-            Most users are currently in the <b>Protective Slab</b> category.
-          </p>
+          {stats.slabDistribution.protected +
+            stats.slabDistribution.nonProtected ===
+          0 ? (
+            <p className="text-center text-gray-400 font-bold text-sm py-10">
+              No bill data synced yet.
+            </p>
+          ) : (
+            <>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={slabPieData}
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={8}
+                      dataKey="value"
+                    >
+                      {slabPieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend
+                      iconType="circle"
+                      wrapperStyle={{
+                        paddingTop: "20px",
+                        fontSize: "12px",
+                        fontWeight: "bold",
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <p className="text-[11px] text-center text-gray-400 mt-4 leading-relaxed font-medium">
+                Based on each user's most recent synced bill (≤200 units =
+                Protected).
+              </p>
+            </>
+          )}
         </div>
       </div>
 
-      {/* AI chart and action buttons */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Action Button */}
-        <div className="lg:col-span-4 space-y-4">
-          <div className="bg-white dark:bg-[#1E293B] p-8 rounded-[40px] border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 group overflow-hidden relative">
-            <div className="absolute right-2 bottom-16 text-blue-500 opacity-5 group-hover:opacity-10 transition-opacity">
-              <LuMegaphone size={140} />
-            </div>
-
-            <div className="relative z-10">
-              <h4 className="text-xl font-black text-gray-900 dark:text-white mb-2">
-                Send System Alert
-              </h4>
-              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mb-3">
-                Send real-time push notifications to all SlabGuard users.
-              </p>
-
-              <button onClick={() => navigate("/admin/broadcast")} className="w-full py-4 rounded-2xl bg-brand-gradient text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 hover:scale-[1.02] transition-transform">
-                COMPOSE MESSAGE <LuArrowRight size={16} />
-              </button>
-            </div>
+      {/* ACTION SHORTCUTS — unchanged, these already go to real pages */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white dark:bg-[#1E293B] p-8 rounded-[40px] border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 group overflow-hidden relative">
+          <div className="absolute right-2 bottom-16 text-blue-500 opacity-5 group-hover:opacity-10 transition-opacity">
+            <LuMegaphone size={140} />
           </div>
+          <div className="relative z-10">
+            <h4 className="text-xl font-black text-gray-900 dark:text-white mb-2">
+              Manage Users
+            </h4>
+            <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mb-3">
+              View, search, and manage all SlabGuard consumers.
+            </p>
+            <button
+              onClick={() => navigate("/admin/manage-users")}
+              className="relative w-full py-4 rounded-2xl bg-brand-gradient text-white font-black text-sm flex items-center justify-center gap-2 overflow-hidden group shadow-lg shadow-blue-500/20 transition-all active:scale-95 cursor-pointer"
+            >
+              <span className="relative z-10 flex items-center gap-2">
+                OPEN USER LIST <LuArrowRight size={16} />
+              </span>
+              <span className="absolute inset-0 bg-white/20 -translate-x-full group-hover:translate-x-0 transition duration-700"></span>
+            </button>
+          </div>
+        </div>
 
-          <div className="bg-white dark:bg-[#1E293B] p-8 rounded-[40px] border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 group overflow-hidden relative">
-            <div className="absolute right-2 bottom-16 text-emerald-500 opacity-5 group-hover:opacity-10 transition-opacity">
-              <LuZap size={140} />
-            </div>
-
-            <div className="relative z-10">
-              <h4 className="text-xl font-black text-gray-900 dark:text-white mb-2">
-                Update Tariffs
-              </h4>
-              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mb-3">
-                Modify MEPCO unit rates and tax slabs instantly.
-              </p>
-
-              <button onClick={() => navigate("/admin/tariff-rates")} className="w-full py-4 rounded-2xl bg-gray-900 dark:bg-white dark:text-gray-900 text-white font-black text-sm flex items-center justify-center gap-2 shadow-xl hover:scale-[1.02] transition-transform">
+        <div className="bg-white dark:bg-[#1E293B] p-8 rounded-[40px] border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 group overflow-hidden relative">
+          <div className="absolute right-2 bottom-16 text-emerald-500 opacity-5 group-hover:opacity-10 transition-opacity">
+            <LuZap size={140} />
+          </div>
+          <div className="relative z-10">
+            <h4 className="text-xl font-black text-gray-900 dark:text-white mb-2">
+              Update Tariffs
+            </h4>
+            <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mb-3">
+              Modify MEPCO unit rates and tax slabs.
+            </p>
+            <button
+              onClick={() => navigate("/admin/tariff-rates")}
+              className="relative w-full py-4 rounded-2xl bg-brand-gradient text-white font-black text-sm flex items-center justify-center gap-2 overflow-hidden group shadow-lg shadow-blue-500/20 transition-all active:scale-95 cursor-pointer"
+            >
+              <span className="relative z-10 flex items-center gap-2">
                 OPEN RATE EDITOR <LuArrowRight size={16} />
-              </button>
-            </div>
+              </span>
+              <span className="absolute inset-0 bg-white/20 -translate-x-full group-hover:translate-x-0 transition duration-700"></span>
+            </button>
           </div>
-        </div>
-        {/* Feature Usage Bar Chart */}
-        <div className="lg:col-span-8 bg-white dark:bg-[#1E293B] p-8 rounded-[40px] border border-gray-100 dark:border-gray-800 shadow-sm">
-          <h3 className="text-xl font-black mb-6 dark:text-white">
-            Feature Popularity
-          </h3>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={featureUsage} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" opacity={0.5} />
-                <XAxis type="number" />
-                <YAxis
-                  dataKey="name"
-                  type="category"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: "#94a3b8", fontSize: 10 }}
-                  width={80}
-                />
-                <Tooltip cursor={{ fill: "transparent" }} />
-                <Bar dataKey="value" radius={[0, 10, 10, 0]} barSize={20}>
-                  {featureUsage.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <p className="text-xs text-center text-gray-400 mt-4">
-            OCR scanning is currently the most used tool.
-          </p>
-        </div>
-      </div>
-
-      {/* ================= RECENT SYSTEM ACTIVITY ================= */}
-      <div className="bg-white dark:bg-[#1E293B] rounded-[40px] border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm">
-        <div className="p-8 border-b border-gray-50 dark:border-gray-800 flex justify-between items-center">
-          <h3 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-            <LuActivity className="text-brand-blue" /> Recent System Activity
-          </h3>
-          <button
-            onClick={() => navigate("/admin/logs")}
-            className="text-xs font-bold text-brand-blue hover:underline cursor-pointer"
-          >
-            View All Logs
-          </button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-gray-50 dark:bg-gray-800 text-gray-400 text-[10px] uppercase tracking-widest font-black">
-              <tr>
-                <th className="px-8 py-4">Event</th>
-                <th className="px-8 py-4">User</th>
-                <th className="px-8 py-4">Status</th>
-                <th className="px-8 py-4">Time</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-              {[
-                {
-                  event: "OCR Bill Extraction",
-                  user: "zain@example.com",
-                  status: "Success",
-                  time: "2 mins ago",
-                },
-                {
-                  event: "Tariff Update",
-                  user: "System Admin",
-                  status: "Completed",
-                  time: "1 hour ago",
-                },
-                {
-                  event: "New Registration",
-                  user: "ahmed_99",
-                  status: "Success",
-                  time: "3 hours ago",
-                },
-              ].map((row, i) => (
-                <tr
-                  key={i}
-                  className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition"
-                >
-                  <td className="px-8 py-5 text-sm font-bold text-gray-800 dark:text-gray-200">
-                    {row.event}
-                  </td>
-                  <td className="px-8 py-5 text-sm text-gray-500">
-                    {row.user}
-                  </td>
-                  <td className="px-8 py-5 text-sm">
-                    <span className="bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 px-3 py-1 rounded-full text-[10px] font-black uppercase">
-                      {row.status}
-                    </span>
-                  </td>
-                  <td className="px-8 py-5 text-sm text-gray-400">
-                    {row.time}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>

@@ -2,17 +2,19 @@ import { LuSun, LuMoon, LuSearch, LuLogOut, LuSettings } from "react-icons/lu";
 import { RiMenu4Fill } from "react-icons/ri";
 
 import { useTheme } from "../../hooks/useTheme";
-import useravator from "../../assets/avator.jpg";
+// import useravator from "../../assets/avator.jpg";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import { sidebarMenuItems } from "../../constants";
 import { useLocation, useNavigate } from "react-router-dom";
+import { backend_url } from "../../axios";
 
 const Topbar = ({ setMobileOpen }) => {
   const { dark, toggleTheme } = useTheme();
   const [open, setOpen] = useState(false);
 
   const { user, logout, loading } = useAuth();
+  // console.log(user.avatar)
 
   // console.log(user);
   const location = useLocation();
@@ -63,7 +65,15 @@ const Topbar = ({ setMobileOpen }) => {
     return bestMatch || "Settings";
   };
 
-  const pageTitle = findTitleFromMenu(location.pathname, sections);
+  const pageTitles = {
+    "/application-form": "Application Form",
+    // "/settings": "Account Settings",
+  };
+
+  // const pageTitle = findTitleFromMenu(location.pathname, sections);
+  const pageTitle =
+    pageTitles[location.pathname] ||
+    findTitleFromMenu(location.pathname, sections);
 
   const logoutHandler = async () => {
     await logout();
@@ -136,10 +146,16 @@ const Topbar = ({ setMobileOpen }) => {
           >
             <div className="relative">
               <img
-                src={useravator}
-                alt="user"
+                src={`${backend_url}${user.avatar}`}
+                alt={user?.fullName || "User"}
                 className="w-7 h-7 rounded-full object-cover border-2 border-white dark:border-gray-800 shadow"
+                onError={(e) => {
+                  e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                    user?.fullName || "User",
+                  )}&background=2F5FF6&color=fff&size=128`;
+                }}
               />
+
               <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full" />
             </div>
           </button>
@@ -150,9 +166,14 @@ const Topbar = ({ setMobileOpen }) => {
               <div className="flex flex-row gap-2 items-center px-4 py-3 border-b border-gray-200 dark:border-gray-800 text-gray-800 dark:text-gray-100">
                 <div className="relative">
                   <img
-                    src={useravator}
-                    alt="user"
+                    src={`${backend_url}${user.avatar}`}
+                    alt="Avatar"
                     className="min-w-7 h-7 rounded-full object-cover"
+                    onError={(e) => {
+                      e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                        user?.fullName || "User",
+                      )}&background=2F5FF6&color=fff&size=128`;
+                    }}
                   />
                   {/* <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full" /> */}
                 </div>

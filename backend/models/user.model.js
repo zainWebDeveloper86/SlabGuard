@@ -3,7 +3,6 @@ import bcrypt from "bcryptjs";
 
 const userSchema = new mongoose.Schema(
   {
-    // Account related information
     fullName: {
       type: String,
       required: true,
@@ -27,8 +26,26 @@ const userSchema = new mongoose.Schema(
       enum: ["user", "admin"],
       default: "user",
     },
-
-    // SlabGuard specific fields
+    avatar: {
+      type: String,
+      default: null,
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    resetPasswordToken: {
+      type: String,
+      default: null,
+    },
+    resetPasswordTime: {
+      type: Date,
+      default: null,
+    },
     referenceNo: {
       type: String,
       unique: true,
@@ -46,20 +63,31 @@ const userSchema = new mongoose.Schema(
     },
     unitTarget: {
       type: Number, // user's monthly target (e.g., 300 units)
-      default: 300,
+      default: 200,
     },
     applianceProfile: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "ApplianceProfile", // separate model for appliances
     },
-    isActive: {
+    applicationCompleted: {
       type: Boolean,
-      default: true,
+      default: false,
+    },
+    lastSyncedAt: {
+      type: Date,
+      default: null,
+    },
+    deviceApiKey: {
+      type: String,
+      unique: true,
+      sparse: true,
+      select: false, // never leaks in normal responses
     },
   },
   { timestamps: true },
 );
 
+// password modified(like update password case) or not, if not modified then just hashing password
 userSchema.pre("save", async function () {
   if (!this.isModified("password")) return;
   this.password = await bcrypt.hash(this.password, 10);

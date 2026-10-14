@@ -3,6 +3,7 @@ import catchAsyncErrors from "./catchAsyncErrors.js";
 import ErrorHandler from "../utils/ErrorHandler.js";
 import User from "../models/user.model.js";
 
+
 // for normal user
 export const isAuthenticated = catchAsyncErrors(async (req, res, next) => {
   const { token } = req.cookies;
@@ -32,5 +33,23 @@ export const isAdmin = catchAsyncErrors(async (req, res, next) => {
     return next(new ErrorHandler("Access denied. Admin only.", 403));
   }
 
+  next();
+});
+
+
+
+// For IoT devices — no JWT/session, just a long-lived device key in a header.
+export const isDeviceAuthenticated = catchAsyncErrors(async (req, res, next) => {
+  const deviceKey = req.headers["x-device-key"];
+  if (!deviceKey) {
+    return next(new ErrorHandler("Missing x-device-key header", 401));
+  }
+
+  const user = await User.findOne({ deviceApiKey: deviceKey }).select("+deviceApiKey");
+  if (!user) {
+    return next(new ErrorHandler("Invalid device key", 401));
+  }
+
+  req.user = user; // downstream controller (ingestUsage) works exactly the same
   next();
 });

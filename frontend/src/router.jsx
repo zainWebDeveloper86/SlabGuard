@@ -14,7 +14,7 @@ import {
   Tips,
   Alerts,
   Support,
-  History
+  History,
 } from "./pages/User";
 import {
   AdminDashboard,
@@ -35,7 +35,7 @@ import {
   Settings,
   TariffGuide,
 } from "./pages/common";
-import ApplianceForm from "./pages/User/ApplianceForm";
+import ApplicationForm from "./pages/Application/ApplicationForm";
 
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -53,6 +53,7 @@ const router = createBrowserRouter(
 
       {/* 🔐 Protected Area (Dashboard Wrapper) */}
       <Route element={<ProtectedRoute />}>
+        <Route path="application-form" element={<ApplicationForm />} />
         <Route element={<DashboardLayout />}>
           {/* ⚙️ Shared Route: Dono Admin aur User isay access kar sakte hain */}
 
@@ -61,7 +62,6 @@ const router = createBrowserRouter(
 
           {/* 👤 User Specific Routes */}
           <Route element={<ProtectedRoute allowedRole="user" />}>
-            <Route path="setup-profile" element={<ApplianceForm />} />
             <Route path="home" element={<Home />} />
             <Route path="usage" element={<Usage />} />
             <Route path="predict" element={<PredictionBill />} />
