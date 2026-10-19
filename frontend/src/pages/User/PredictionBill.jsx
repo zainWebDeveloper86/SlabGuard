@@ -84,6 +84,11 @@ const PredictionBill = () => {
   const predictedUnits = prediction?.predictedUnits ?? 0;
   const predictedBill = prediction?.predictedBill ?? 0;
   const difference = budget - predictedBill;
+  const historyDescription = prediction?.monthsUsed > 0
+    ? prediction.modelVersion === "prophet-v1"
+      ? `Based on ${prediction.monthsUsed} recorded days of electricity usage,`
+      : `Based on your last ${prediction.monthsUsed} synced months,`
+    : "Based on your available electricity usage history,";
 
   const slabData = prediction
     ? [
@@ -156,8 +161,7 @@ const PredictionBill = () => {
                 </div>
 
                 <p className="mt-4 text-blue-100 font-medium max-w-md">
-                  Based on your last {prediction.monthsUsed} synced months,
-                  you're projected to consume
+                  {historyDescription} you're projected to consume
                   <span className="text-white font-black underline decoration-amber-400 ml-1">
                     {predictedUnits} Units
                   </span>
@@ -193,10 +197,11 @@ const PredictionBill = () => {
                     </span>
                   )}
                 </div>
-                {prediction.monthsUsed < 6 && (
+                {prediction.modelVersion === "moving-average-v1" &&
+                  prediction.monthsUsed > 0 && prediction.monthsUsed < 6 && (
                   <p className="mt-2 text-[11px] text-blue-100/80 italic">
-                    Protected-slab eligibility uses a 6-month rolling average —
-                    you have {prediction.monthsUsed} so far.
+                    SlabGuard checks each of the six most recent historical bills
+                    for protected-slab eligibility — you have {prediction.monthsUsed} synced months so far.
                   </p>
                 )}
               </div>

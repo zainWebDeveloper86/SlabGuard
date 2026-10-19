@@ -39,6 +39,15 @@ export async function determineSlabCategory(
 //   confirmed by ebillpakistan: "a lifeline consumer gets no [previous
 //   slab] benefit at all", same as non-protected mechanism
 // ============================================================
+function findConsumptionSlab(units, slabs) {
+  // Slabs are ordered by increasing upper limit. Display ranges such as
+  // 101-200 mean consumption above 100 through 200, including fractions.
+  return (
+    slabs.find((slab) => slab.rangeTo == null || units <= slab.rangeTo) ||
+    slabs[slabs.length - 1]
+  );
+}
+
 function calculateSlabCost(units, slabs, category) {
   if (category === "protected") {
     let remainingUnits = units;
@@ -57,10 +66,7 @@ function calculateSlabCost(units, slabs, category) {
   }
 
   // non-protected AND lifeline — landing slab
-  const matchedSlab =
-    slabs.find(
-      (s) => units >= s.rangeFrom && (s.rangeTo === null || units <= s.rangeTo),
-    ) || slabs[slabs.length - 1];
+  const matchedSlab = findConsumptionSlab(units, slabs);
   return units * matchedSlab.rate;
 }
 
@@ -95,11 +101,7 @@ export async function calculateBill(userId, units, peakUnits = 0) {
     peakUnits > 0 &&
     tariff.peakHours
   ) {
-    const marginalSlab =
-      slabs.find(
-        (s) =>
-          units >= s.rangeFrom && (s.rangeTo === null || units <= s.rangeTo),
-      ) || slabs[slabs.length - 1];
+    const marginalSlab = findConsumptionSlab(units, slabs);
     const extraRatePerUnit =
       marginalSlab.rate * (tariff.peakHours.rateMultiplier - 1);
     peakSurcharge = Math.round(peakUnits * extraRatePerUnit);

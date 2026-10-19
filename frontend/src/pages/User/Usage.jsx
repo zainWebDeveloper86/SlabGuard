@@ -48,6 +48,9 @@ const Usage = () => {
   const [dailyUsage, setDailyUsage] = useState([]);
   const [threshold, setThreshold] = useState(200);
   const [hourlyData, setHourlyData] = useState([]);
+  const [isHourlyLoading, setIsHourlyLoading] = useState(true);
+  const [hourlyError, setHourlyError] = useState(null);
+  const [hourlyRetry, setHourlyRetry] = useState(0);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isLoading, setIsLoading] = useState(true);
 
@@ -79,22 +82,37 @@ const Usage = () => {
     fetchData();
   }, []);
 
-  const fetchHourlyData = async (date) => {
-    try {
-      const res = await axiosServerInstance.get("/usage/hourly/me", {
-        params: { date: date.toISOString().slice(0, 10) },
-      });
-      if (res.data.success) setHourlyData(res.data.hourlyData);
-    } catch (error) {
-      console.error("Failed to fetch hourly data:", error);
-    }
-  };
-
   useEffect(() => {
-    fetchHourlyData(selectedDate);
-  }, [selectedDate]);
+    let ignore = false;
 
-  const latest = history[0];
+    const fetchHourlyData = async () => {
+      setIsHourlyLoading(true);
+      setHourlyError(null);
+      setHourlyData([]);
+      try {
+        const res = await axiosServerInstance.get("/usage/hourly/me", {
+          params: { date: selectedDate.toISOString().slice(0, 10) },
+        });
+        if (ignore) return;
+        if (!res.data.success || !Array.isArray(res.data.hourlyData)) {
+          throw new Error("Failed to load hourly readings. Please try again.");
+        }
+        setHourlyData(res.data.hourlyData);
+      } catch {
+        if (!ignore) {
+          setHourlyError("Could not load hourly readings. Please try again.");
+        }
+      } finally {
+        if (!ignore) setIsHourlyLoading(false);
+      }
+    };
+
+    fetchHourlyData();
+    return () => { ignore = true; };
+  }, [selectedDate, hourlyRetry]);
+
+  // const latest = history[0]; // old
+  const latest = history.at(-1); // after-codex
   const avgMonthlyCost = history.length
     ? Math.round(
         history.reduce((sum, h) => sum + h.billAmount, 0) / history.length,
@@ -342,7 +360,13 @@ const Usage = () => {
             <input
               type="date"
               value={selectedDate.toISOString().slice(0, 10)}
-              onChange={(e) => setSelectedDate(new Date(e.target.value))}
+              onChange={(e) => {
+                if (!e.target.value) return;
+                setHourlyData([]);
+                setHourlyError(null);
+                setIsHourlyLoading(true);
+                setSelectedDate(new Date(e.target.value));
+              }}
               className="bg-gray-200 rounded-lg px-3 py-1 text-sm font-bold border-none outline-none"
             />
             <span className="text-[10px] text-gray-400">
@@ -352,17 +376,44 @@ const Usage = () => {
         </div>
 
         <div className="h-[200px] w-full">
+          {isHourlyLoading ? (
+            <p role="status" className="text-center text-gray-500 py-16">
+              Loading hourly readings...
+            </p>
+          ) : hourlyError ? (
+            <div role="alert" className="text-center py-12 space-y-3">
+              <p className="text-red-600 dark:text-red-400">{hourlyError}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsHourlyLoading(true);
+                  setHourlyRetry((attempt) => attempt + 1);
+                }}
+                className="text-brand-blue font-bold cursor-pointer underline"
+              >
+                Retry
+              </button>
+            </div>
+          ) : hourlyData.length === 0 ? (
+            <p className="text-center text-gray-500 py-16">
+              No hourly readings available for this date.
+            </p>
+          ) : (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={hourlyData}>
               <XAxis dataKey="label" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} />
               <Tooltip
+                filterNull={false}
                 contentStyle={{
                   borderRadius: "12px",
                   border: "none",
                   boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)",
                 }}
-                formatter={(value) => [`${value} kWh`, "Consumption"]}
+                formatter={(value) => [
+                  value == null ? "No reading" : `${value} kWh`,
+                  "Consumption",
+                ]}
               />
               <Bar dataKey="units" radius={[4, 4, 0, 0]}>
                 {hourlyData.map((entry, index) => (
@@ -374,7 +425,14 @@ const Usage = () => {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          )}
         </div>
+        {!isHourlyLoading && !hourlyError && hourlyData.length > 0 && (
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-3 text-center">
+            Readings received for {hourlyData.filter((entry) => entry.units != null).length}/24 hours.
+            {" "}Missing hours have no reading; 0 kWh means a recorded zero.
+          </p>
+        )}
         <p className="text-xs text-gray-400 mt-4 text-center">
           <span className="inline-block w-3 h-3 bg-amber-500 rounded-full mr-1"></span>
           Peak hours (6 PM – 10 PM) — rates are higher

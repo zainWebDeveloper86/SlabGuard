@@ -193,7 +193,7 @@ const Settings = () => {
               ac_qty: profile.acQty || 0,
               ac_type: profile.acType || "Inverter",
               ac_ton: profile.acTonnage || "1.5",
-              fridge_qty: profile.fridgeQty || 1,
+              fridge_qty: profile.fridgeQty ?? 1,
               oven_type: profile.ovenType || "Microwave",
               water_pump_hrs: profile.waterPumpHours || "1-2 Hours",
               geyser_type: profile.geyserType || "Gas",
@@ -257,9 +257,13 @@ const Settings = () => {
     }
   };
 
-  const copyDeviceKey = () => {
-    navigator.clipboard.writeText(deviceKey);
-    toast.success("Copied to clipboard");
+  const copyDeviceKey = async () => {
+    try {
+      await navigator.clipboard.writeText(deviceKey);
+      toast.success("Copied to clipboard");
+    } catch {
+      toast.error("Could not copy. Please select and copy the key manually.");
+    }
   };
   // ---------------- Security ----------------
   const savePassword = async () => {

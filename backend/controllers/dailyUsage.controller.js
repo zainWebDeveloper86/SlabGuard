@@ -8,15 +8,38 @@ import ErrorHandler from "../utils/ErrorHandler.js";
 // call. The pipeline downstream (aggregation, weather, future Prophet)
 // never needs to know which one sent the data.
 export const addHourlyUsage = catchAsyncErrors(async (req, res, next) => {
-  const { units, timestamp, source } = req.body;
+  const { units, timestamp, source } = req.body ?? {};
+  const numericUnits =
+    typeof units === "number"
+      ? units
+      : typeof units === "string" && units.trim() !== ""
+        ? Number(units)
+        : NaN;
 
-  if (units === undefined || units === null || Number(units) < 0) {
+  if (!Number.isFinite(numericUnits) || numericUnits < 0) {
     return next(
       new ErrorHandler("A valid non-negative 'units' value is required", 400),
     );
   }
 
-  const readingTime = timestamp ? new Date(timestamp) : new Date();
+  if (
+    timestamp !== undefined &&
+    ((typeof timestamp !== "string" && typeof timestamp !== "number") ||
+      (typeof timestamp === "string" && timestamp.trim() === ""))
+  ) {
+    return next(new ErrorHandler("A valid 'timestamp' is required when provided", 400));
+  }
+
+  const readingTime = timestamp === undefined ? new Date() : new Date(timestamp);
+  if (!Number.isFinite(readingTime.getTime())) {
+    return next(new ErrorHandler("A valid 'timestamp' is required when provided", 400));
+  }
+
+  const readingSource = source === undefined ? "simulator" : source;
+  if (!["simulator", "esp32"].includes(readingSource)) {
+    return next(new ErrorHandler("Source must be simulator or esp32", 400));
+  }
+
   const hour = new Date(readingTime);
   hour.setMinutes(0, 0, 0); // truncate to the top of the hour
 
@@ -26,11 +49,11 @@ export const addHourlyUsage = catchAsyncErrors(async (req, res, next) => {
       $set: {
         user: req.user._id,
         hour,
-        units: Number(units),
-        source: source || "simulator",
+        units: numericUnits,
+        source: readingSource,
       },
     },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
+    { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true },
   );
 
   res.status(200).json({ success: true, log });
@@ -79,7 +102,7 @@ export const getMyHourlyUsage = catchAsyncErrors(async (req, res, next) => {
   // 24 hours ka array banao (0-23)
   const hourlyData = Array.from({ length: 24 }, (_, i) => ({
     hour: i,
-    units: 0,
+    units: null, // No reading received; an actual zero remains numeric 0.
     label: `${String(i).padStart(2, "0")}:00`,
   }));
 

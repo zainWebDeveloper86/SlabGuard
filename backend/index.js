@@ -34,7 +34,7 @@ const startServer = async () => {
   try {
     await connectDB();
     console.log("Database connected successfully");
-    seedTariff(); // sync tariff rates
+    await seedTariff(); // finish tariff initialization before accepting requests
 
     // Uploads folder create
     const uploadDir = path.join(__dirname, "uploads");
@@ -50,7 +50,7 @@ const startServer = async () => {
 
     startNightlyAggregationJob();
   } catch (error) {
-    console.log("Database connection failed:", error.message);
+    console.log("Server startup failed:", error.message);
     process.exit(1);
   }
 };
