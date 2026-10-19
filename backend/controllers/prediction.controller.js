@@ -23,11 +23,6 @@ const MONTH_ABBR = [
   "Nov",
   "Dec",
 ];
-function currentMonthLabel() {
-  const now = new Date();
-  return `${MONTH_ABBR[now.getMonth()]}${String(now.getFullYear()).slice(-2)}`;
-}
-
 // const MODEL_VERSION = "moving-average-v1";
 
 export const generatePrediction = catchAsyncErrors(async (req, res, next) => {
@@ -38,13 +33,14 @@ export const generatePrediction = catchAsyncErrors(async (req, res, next) => {
   let targetMonth;
 
   if (forecast) {
-    targetMonth = currentMonthLabel(); // e.g. "Aug26" — this cycle, live
+    const [year, month] = forecast.projection.startDate.split("-");
+    targetMonth = `${MONTH_ABBR[Number(month) - 1]}${year.slice(-2)}`;
   } else {
     forecast = await predictNextMonthUnits(req.user._id);
     if (!forecast) {
       return next(
         new ErrorHandler(
-          "Not enough history yet — sync at least 2 months of MEPCO data, or let the IoT simulator collect at least 10 days.",
+          "Prediction unavailable. Prophet needs at least 10 complete past days (24 hourly readings per day) and a working forecasting service; the fallback needs at least 2 months of synced MEPCO history.",
           400,
         ),
       );
@@ -102,6 +98,8 @@ export const generatePrediction = catchAsyncErrors(async (req, res, next) => {
         breakdown: predictedBillResult,
         savingSuggestion,
         monthsUsed: forecast.monthsUsed ?? forecast.daysUsed ?? null,
+        daysUsed: forecast.daysUsed ?? null,
+        projection: forecast.projection ?? null,
       },
     },
     { upsert: true, new: true, setDefaultsOnInsert: true },

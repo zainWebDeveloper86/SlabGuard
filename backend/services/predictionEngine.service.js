@@ -6,96 +6,95 @@ import { callProphetService } from "./prophetClient.service.js";
 
 const MIN_DAILY_POINTS_FOR_PROPHET = 10;
 
-/**
- * Tier-1 prediction: uses real daily granularity (DailyUsage, fed by the
- * IoT/simulator pipeline) + the Prophet microservice to project the
- * CURRENT month's total — actual units so far + forecasted remaining days.
- * This is the "mid-cycle warning" feature from the original pitch, and
- * genuinely different from predictNextMonthUnits() below (which guesses
- * next month from monthly BillHistory only).
- *
- * Returns null if we don't have enough daily data yet or the Python
- * service is unreachable — caller should fall back to predictNextMonthUnits.
- */
-export async function predictCurrentMonthProjection(userId) {
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const daysInMonth = new Date(
-    now.getFullYear(),
-    now.getMonth() + 1,
-    0,
-  ).getDate();
-  const daysRemaining = daysInMonth - now.getDate();
+// DailyUsage dates are interpreted in the consumer's timezone, independent
+// of the server's timezone. The current component still targets calendar months.
+const pakistanDay = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Karachi", year: "numeric", month: "2-digit", day: "2-digit",
+});
 
-  // Pull ALL daily history we have — Prophet benefits from more signal,
-  // not just the current month's slice.
+export async function predictCurrentMonthProjection(userId, now = new Date()) {
+  const today = pakistanDay.format(now);
+  const [year, month] = today.split("-").map(Number);
+  const monthPrefix = today.slice(0, 7);
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const targetDates = Array.from({ length: daysInMonth }, (_, i) =>
+    monthPrefix + "-" + String(i + 1).padStart(2, "0"),
+  );
   const allDaily = await DailyUsage.find({ user: userId }).sort({ date: 1 });
 
-  if (allDaily.length < MIN_DAILY_POINTS_FOR_PROPHET) {
-    return null; // not enough daily granularity yet
+  // Today's daily aggregate can be partial. Incomplete past days are also
+  // excluded from training/actual totals and estimated as whole days instead.
+  const observed = new Map();
+  for (const daily of allDaily) {
+    if (!(daily.date instanceof Date) || !Number.isFinite(daily.date.getTime())) continue;
+    const ds = pakistanDay.format(daily.date);
+    if (ds >= today || daily.hoursLogged !== 24 ||
+        !Number.isFinite(daily.totalUnits) || daily.totalUnits < 0) continue;
+    // Ambiguous duplicate calendar dates must not silently double-count energy.
+    if (observed.has(ds)) return null;
+    const weekday = new Date(ds + "T00:00:00Z").getUTCDay();
+    observed.set(ds, {
+      ds, y: daily.totalUnits,
+      temp: Number.isFinite(daily.avgTemp) ? daily.avgTemp : null,
+      is_holiday: weekday === 0 || weekday === 6,
+    });
   }
-
-  const actualSoFarThisMonth = allDaily
-    .filter((d) => d.date >= monthStart)
-    .reduce((sum, d) => sum + d.totalUnits, 0);
-
-  // Last day of the month — nothing left to forecast, actual IS the answer.
-  if (daysRemaining <= 0) {
-    return {
-      predictedUnits: Math.round(actualSoFarThisMonth),
-      confidence: 95,
-      daysUsed: allDaily.length,
-      modelVersion: "prophet-v1",
-    };
-  }
-
-  const history = allDaily.map((d) => ({
-    ds: d.date.toISOString().slice(0, 10),
-    y: d.totalUnits,
-    temp: d.avgTemp,
-    is_holiday: d.isHoliday,
-  }));
+  if (observed.size < MIN_DAILY_POINTS_FOR_PROPHET) return null;
+  const history = [...observed.values()].sort((a, b) => a.ds.localeCompare(b.ds));
 
   let forecastResult;
   try {
-    forecastResult = await callProphetService(history, daysRemaining);
+    forecastResult = await callProphetService(history, daysInMonth, {
+      forecastStart: targetDates[0], forecastEnd: targetDates.at(-1),
+    });
   } catch (error) {
     console.error("[Prophet] Microservice call failed:", error.message);
-    return null; // caller falls back to moving-average
+    return null;
   }
 
-  const forecastedRemainingUnits = forecastResult.forecast.reduce(
-    (sum, point) => sum + point.yhat,
-    0,
-  );
-  const predictedUnits = Math.round(
-    actualSoFarThisMonth + forecastedRemainingUnits,
-  );
+  // Reject incomplete or incompatible responses instead of presenting a
+  // short forecast as a complete month. This also detects an old Python server.
+  const points = forecastResult?.forecast;
+  if (!Array.isArray(points) || points.length !== targetDates.length) return null;
+  const byDate = new Map();
+  for (const point of points) {
+    if (!targetDates.includes(point.ds) || byDate.has(point.ds) ||
+        !Number.isFinite(point.yhat) || point.yhat < 0 ||
+        !Number.isFinite(point.yhat_lower) || point.yhat_lower < 0 ||
+        !Number.isFinite(point.yhat_upper) || point.yhat_upper < point.yhat_lower) return null;
+    byDate.set(point.ds, point);
+  }
 
-  // Confidence from Prophet's own uncertainty interval — narrower interval
-  // (relative to the forecast size) = higher confidence. Same "don't
-  // fabricate a number" principle as the moving-average model's
-  // coefficient-of-variation approach.
-  const avgIntervalWidth =
-    forecastResult.forecast.reduce(
-      (s, p) => s + (p.yhat_upper - p.yhat_lower),
-      0,
-    ) / forecastResult.forecast.length;
-  const relativeUncertainty =
-    forecastedRemainingUnits > 0
-      ? avgIntervalWidth / forecastedRemainingUnits
-      : 1;
-  const confidence = Math.max(
-    50,
-    Math.min(95, Math.round(95 - relativeUncertainty * 30)),
-  );
+  const measuredDates = targetDates.filter((ds) => observed.has(ds));
+  const estimatedDates = targetDates.filter((ds) => !observed.has(ds));
+  const actualUnits = measuredDates.reduce((sum, ds) => sum + observed.get(ds).y, 0);
+  const estimatedPoints = estimatedDates.map((ds) => byDate.get(ds));
+  const estimatedUnits = estimatedPoints.reduce((sum, point) => sum + point.yhat, 0);
+  const predictedUnits = Math.round(actualUnits + estimatedUnits);
+
+  // This is a heuristic uncertainty score, not a measured accuracy percentage.
+  // Compare daily width with daily predicted usage so a longer horizon does
+  // not automatically inflate the score.
+  const avgIntervalWidth = estimatedPoints.reduce(
+    (sum, point) => sum + point.yhat_upper - point.yhat_lower, 0,
+  ) / estimatedPoints.length;
+  const avgEstimatedUnits = estimatedUnits / estimatedPoints.length;
+  const relativeUncertainty = avgEstimatedUnits > 0 ? avgIntervalWidth / avgEstimatedUnits : 1;
+  const confidence = Math.max(50, Math.min(95, Math.round(95 - relativeUncertainty * 30)));
 
   return {
-    predictedUnits,
-    confidence,
-    daysUsed: allDaily.length,
+    predictedUnits, confidence, daysUsed: history.length,
     modelVersion: forecastResult.modelVersion,
     usedTemperatureRegressor: forecastResult.usedTemperatureRegressor,
+    projection: {
+      periodType: "calendar-month", timeZone: "Asia/Karachi",
+      startDate: targetDates[0], endDate: targetDates.at(-1),
+      observedDays: measuredDates.length, estimatedDays: estimatedDates.length,
+      estimatedPastDays: estimatedDates.filter((ds) => ds < today).length,
+      forecastDays: estimatedDates.filter((ds) => ds >= today).length,
+      actualUnits: Math.round(actualUnits * 100) / 100,
+      estimatedUnits: Math.round(estimatedUnits * 100) / 100,
+    },
   };
 }
 

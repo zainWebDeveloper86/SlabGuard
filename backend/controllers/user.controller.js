@@ -8,6 +8,7 @@ import sendToken from "../utils/jwtToken.js";
 import crypto from "crypto";
 import sendMail from "../utils/sendMail.js";
 import jwt from "jsonwebtoken";
+import { normalizeReadingSchedule } from "../utils/readingSchedule.js";
 
 
 // =============================================
@@ -211,6 +212,10 @@ export const completeApplication = catchAsyncErrors(async (req, res, next) => {
     return next(new ErrorHandler("Sanctioned load cannot be negative", 400));
   }
 
+  const scheduleUpdate = Object.hasOwn(req.body, "readingSchedule")
+    ? { readingSchedule: normalizeReadingSchedule(req.body.readingSchedule) }
+    : {};
+
   const user = await User.findByIdAndUpdate(
     req.user._id,
     {
@@ -220,6 +225,7 @@ export const completeApplication = catchAsyncErrors(async (req, res, next) => {
         sanctionedLoad: Number(sanctionedLoad),
         unitTarget: unitTarget !== undefined ? Number(unitTarget) : 300,
         applicationCompleted: true,
+        ...scheduleUpdate,
       },
     },
     {

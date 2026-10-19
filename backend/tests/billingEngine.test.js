@@ -4,6 +4,7 @@ import Tariff from "../models/tariff.model.js";
 import BillHistory from "../models/billHistory.model.js";
 import User from "../models/user.model.js";
 import { calculateBill } from "../services/billingEngine.service.js";
+import { DEFAULT_TARIFF } from "../controllers/tariff.controller.js";
 
 // Synthetic rates test the calculation, not official utility tariffs.
 const tariff = {
@@ -32,6 +33,17 @@ function mockData(t, { history = [], meterType = "single" } = {}) {
     sort: () => ({ limit: async (count) => history.slice(0, count) }),
   }));
 }
+
+test("464 units reproduce the screenshot amount using source-code default tariffs", async (t) => {
+  t.mock.method(Tariff, "findOne", async () => DEFAULT_TARIFF);
+  t.mock.method(User, "findById", async () => ({ meterType: "single", sanctionedLoad: 0 }));
+  t.mock.method(BillHistory, "find", () => ({ sort: () => ({ limit: async () => [] }) }));
+  const bill = await calculateBill("test-user", 464);
+  assert.equal(bill.energyCost, 18073);
+  assert.equal(bill.gstAmount, 3253);
+  assert.equal(bill.edAmount, 271);
+  assert.equal(bill.totalBill, 21597);
+});
 
 for (const [units, rate] of [
   [0, 10], [0.5, 10], [99.5, 10], [100, 10],

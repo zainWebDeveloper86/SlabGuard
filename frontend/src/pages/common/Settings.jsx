@@ -21,6 +21,10 @@ import { useAuth } from "../../hooks/useAuth";
 import { axiosServerInstance, backend_url } from "../../axios.js";
 import { useEffect } from "react";
 
+const getPakistanToday = () => new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Karachi", year: "numeric", month: "2-digit", day: "2-digit",
+}).format(new Date());
+
 const Settings = () => {
   const { user, login } = useAuth();
   const isAdmin = user?.role === "admin";
@@ -38,6 +42,7 @@ const Settings = () => {
     meterType: "single",
     sanctionedLoad: 0,
     unitTarget: 300,
+    readingSchedule: { lastConfirmedReadingDate: "", expectedDayFrom: "", expectedDayTo: "" },
   });
 
   useEffect(() => {
@@ -51,6 +56,11 @@ const Settings = () => {
       meterType: user.meterType || "single",
       sanctionedLoad: user.sanctionedLoad ?? 0,
       unitTarget: user.unitTarget ?? 300,
+      readingSchedule: {
+        lastConfirmedReadingDate: user.readingSchedule?.lastConfirmedReadingDate ?? "",
+        expectedDayFrom: user.readingSchedule?.expectedDayFrom ?? "",
+        expectedDayTo: user.readingSchedule?.expectedDayTo ?? "",
+      },
     });
   }, [user]);
 
@@ -133,6 +143,13 @@ const Settings = () => {
   };
 
   // ---------------- Electricity (reuses the same endpoint ApplicationForm uses) ----------------
+  const updateReadingSchedule = (field, value) => {
+    setElectricityForm((previous) => ({
+      ...previous,
+      readingSchedule: { ...previous.readingSchedule, [field]: value },
+    }));
+  };
+
   const saveElectricity = async () => {
     const referenceNo = electricityForm.referenceNo.trim();
     const { meterType, sanctionedLoad } = electricityForm;
@@ -140,6 +157,23 @@ const Settings = () => {
       toast.error(
         "Reference number, meter type and sanctioned load are required",
       );
+      return;
+    }
+    const { lastConfirmedReadingDate, expectedDayFrom, expectedDayTo } = electricityForm.readingSchedule;
+    if ((expectedDayFrom === "") !== (expectedDayTo === "")) {
+      toast.error("Enter both expected reading days, or leave both blank");
+      return;
+    }
+    if (expectedDayFrom !== "" && (
+      !Number.isInteger(Number(expectedDayFrom)) || !Number.isInteger(Number(expectedDayTo)) ||
+      Number(expectedDayFrom) < 1 || Number(expectedDayTo) > 31 ||
+      Number(expectedDayFrom) > Number(expectedDayTo)
+    )) {
+      toast.error("Enter a reading window from 1 to 31, with the start day before or equal to the end day");
+      return;
+    }
+    if (lastConfirmedReadingDate && lastConfirmedReadingDate > getPakistanToday()) {
+      toast.error("Last confirmed reading date cannot be in the future");
       return;
     }
     setSavingTab("electricity");
@@ -512,6 +546,69 @@ const Settings = () => {
                     />
                   </div>
                 </div>
+                <fieldset className="space-y-4 border-t border-gray-100 dark:border-gray-800 pt-6">
+                  <legend className="text-sm font-black dark:text-white px-2">
+                    Meter Reading Schedule (Optional)
+                  </legend>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Enter the last date your utility reader actually recorded the meter, and the
+                    day range when you usually expect the next reading. Use your own area's schedule.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <label htmlFor="last-confirmed-reading" className="text-xs font-bold text-gray-500 dark:text-gray-400">
+                        Last Confirmed Reading Date
+                      </label>
+                      <input
+                        id="last-confirmed-reading"
+                        type="date"                
+                        max={getPakistanToday()}
+                        value={electricityForm.readingSchedule.lastConfirmedReadingDate}
+                        onChange={(e) => updateReadingSchedule("lastConfirmedReadingDate", e.target.value)}
+                        className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 dark:text-white font-bold"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor="expected-reading-from" className="text-xs font-bold text-gray-500 dark:text-gray-400">
+                        Expected Reading: From Day
+                      </label>
+                      <input
+                        id="expected-reading-from"
+                        type="number" min="1" max="31" step="1" placeholder="e.g. 20"
+                        value={electricityForm.readingSchedule.expectedDayFrom}
+                        onChange={(e) => updateReadingSchedule("expectedDayFrom", e.target.value)}
+                        className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 dark:text-white font-bold"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor="expected-reading-to" className="text-xs font-bold text-gray-500 dark:text-gray-400">
+                        Expected Reading: To Day
+                      </label>
+                      <input
+                        id="expected-reading-to"
+                        type="number" min="1" max="31" step="1" placeholder="e.g. 24"
+                        value={electricityForm.readingSchedule.expectedDayTo}
+                        onChange={(e) => updateReadingSchedule("expectedDayTo", e.target.value)}
+                        className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 dark:text-white font-bold"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    For example, 20 to 24 means an expected reading between those dates each month.
+                    These settings are saved for now; predictions still use calendar months.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setElectricityForm((previous) => ({
+                      ...previous,
+                      readingSchedule: { lastConfirmedReadingDate: "", expectedDayFrom: "", expectedDayTo: "" },
+                    }))}
+                    className="text-sm text-brand-blue underline cursor-pointer"
+                  >
+                    Clear reading schedule
+                  </button>
+                  <p className="text-xs text-gray-400">Use Save Changes below to save or clear these details.</p>
+                </fieldset>
               </div>
             )}
 

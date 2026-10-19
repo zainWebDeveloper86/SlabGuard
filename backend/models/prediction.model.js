@@ -15,6 +15,8 @@ const predictionSchema = new mongoose.Schema(
     breakdown: { type: mongoose.Schema.Types.Mixed }, // full calculateBill() output, kept for transparency
     savingSuggestion: { type: mongoose.Schema.Types.Mixed, default: null },
     monthsUsed: { type: Number },
+    daysUsed: { type: Number },
+    projection: { type: mongoose.Schema.Types.Mixed, default: null },
   },
   { timestamps: true },
 );

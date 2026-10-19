@@ -1,6 +1,15 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 
+const readingScheduleSchema = new mongoose.Schema(
+  {
+    lastConfirmedReadingDate: { type: String, default: null },
+    expectedDayFrom: { type: Number, min: 1, max: 31, default: null },
+    expectedDayTo: { type: Number, min: 1, max: 31, default: null },
+  },
+  { _id: false },
+);
+
 const userSchema = new mongoose.Schema(
   {
     fullName: {
@@ -77,6 +86,7 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    readingSchedule: { type: readingScheduleSchema, default: () => ({}) },
     deviceApiKey: {
       type: String,
       unique: true,

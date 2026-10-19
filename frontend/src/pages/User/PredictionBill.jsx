@@ -84,9 +84,10 @@ const PredictionBill = () => {
   const predictedUnits = prediction?.predictedUnits ?? 0;
   const predictedBill = prediction?.predictedBill ?? 0;
   const difference = budget - predictedBill;
-  const historyDescription = prediction?.monthsUsed > 0
+  const trainingCount = prediction?.daysUsed ?? prediction?.monthsUsed;
+  const historyDescription = trainingCount > 0
     ? prediction.modelVersion === "prophet-v1"
-      ? `Based on ${prediction.monthsUsed} recorded days of electricity usage,`
+      ? `Based on ${trainingCount} complete recorded days of electricity usage,`
       : `Based on your last ${prediction.monthsUsed} synced months,`
     : "Based on your available electricity usage history,";
 
@@ -115,7 +116,7 @@ const PredictionBill = () => {
             Bill Prediction
           </h1>
           <p className="text-gray-500 dark:text-gray-400 font-medium">
-            Statistical forecasting based on your synced billing history.
+            Estimated electricity costs based on your available usage history.
           </p>
         </div>
         <button
@@ -139,8 +140,10 @@ const PredictionBill = () => {
         <div className="bg-white dark:bg-[#1E293B] rounded-[40px] border border-dashed border-gray-200 dark:border-gray-800 p-12 text-center">
           <LuSparkles className="mx-auto text-gray-300 mb-4" size={40} />
           <p className="text-gray-500 font-bold">
-            No prediction yet. Sync at least 2 months of billing history (Home
-            dashboard → Sync), then hit "Generate My First Prediction".
+            No prediction yet. Prophet needs at least 10 complete past days of
+            usage (24 hourly readings per day) and the running Python service.
+            Alternatively, sync at least 2 months of billing history for the
+            moving-average fallback, then hit "Generate My First Prediction".
           </p>
         </div>
       ) : (
@@ -151,7 +154,7 @@ const PredictionBill = () => {
               <div className="absolute inset-0 bg-white/5 backdrop-blur-[2px]" />
               <div className="relative z-10">
                 <span className="bg-white/20 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest">
-                  Predicted Next Bill
+                  {prediction.projection ? "Estimated Calendar-Month Bill" : "Estimated Bill"}
                 </span>
 
                 <div className="mt-6 flex items-end gap-2">
@@ -168,6 +171,18 @@ const PredictionBill = () => {
                   .
                 </p>
 
+                {prediction.projection && (
+                  <div className="mt-3 text-xs text-blue-100 space-y-1">
+                    <p>{prediction.projection.startDate} to {prediction.projection.endDate} (Pakistan time)</p>
+                    <p>{prediction.projection.observedDays} complete days recorded; {prediction.projection.estimatedDays} days estimated.</p>
+                    <p>{prediction.projection.actualUnits} kWh recorded + {prediction.projection.estimatedUnits} kWh estimated.</p>
+                    {prediction.projection.estimatedPastDays > 0 && (
+                      <p>{prediction.projection.estimatedPastDays} past days have missing or incomplete readings and are estimated.</p>
+                    )}
+                    <p>Calendar-month projection; actual meter-reading cycle alignment is pending.</p>
+                  </div>
+                )}
+
                 {/* <div className="mt-4 text-xs text-blue-100">
                   Confidence:{" "}
                   <span className="font-bold text-white">
@@ -180,7 +195,7 @@ const PredictionBill = () => {
 
                 <div className="mt-4 text-xs text-blue-100 flex flex-wrap items-center gap-2">
                   <span>
-                    Confidence:{" "}
+                    Model score:{" "}
                     <span className="font-bold text-white">
                       {prediction.confidence}%
                     </span>
@@ -197,6 +212,9 @@ const PredictionBill = () => {
                     </span>
                   )}
                 </div>
+                <p className="mt-2 text-[11px] text-blue-100/80">
+                  Model score is a heuristic. Forecast accuracy needs comparison with actual consumption.
+                </p>
                 {prediction.modelVersion === "moving-average-v1" &&
                   prediction.monthsUsed > 0 && prediction.monthsUsed < 6 && (
                   <p className="mt-2 text-[11px] text-blue-100/80 italic">

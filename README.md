@@ -98,33 +98,24 @@ The forecasting service uses Prophet with a moving-average fallback when suffici
    npm run dev
    ```
 
-4. Set up the forecasting service in a separate terminal from the project root:
+4. Start the forecasting service in a separate Anaconda/Miniconda Prompt,
+   using the existing working Windows environment:
 
-   ```bash
-   cd ml-service
-   python -m venv venv
+   ```bat
+   cd /d "D:\University Data\slabguard\ml-service"
+   conda activate slabguard-ml
+   python -m uvicorn main:app --reload --port 8000
    ```
 
-   Activate the virtual environment:
+   Adjust the project path for your checkout. This assumes `slabguard-ml`
+   already exists. PowerShell can also be used if Conda activation is configured.
+   Activating Conda sets native-library paths as well as selecting Python;
+   directly running `venv\Scripts\python.exe` selects a different environment.
 
-   **Windows:**
-
-   ```bash
-   venv\Scripts\activate
-   ```
-
-   **Linux / macOS:**
-
-   ```bash
-   source venv/bin/activate
-   ```
-
-   Install dependencies and start the service:
-
-   ```bash
-   pip install -r requirements.txt
-   uvicorn main:app --reload --port 8000
-   ```
+   See [ML service setup and checks](ml-service/README.md) for verified versions
+   and forecast smoke tests. The existing `requirements.txt` contains older
+   pins and does not describe this working Conda environment. Fresh-environment
+   installation instructions need separate validation.
 
 5. Set up the frontend in another terminal from the project root:
 
