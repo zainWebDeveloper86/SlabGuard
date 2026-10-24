@@ -9,6 +9,7 @@ import crypto from "crypto";
 import sendMail from "../utils/sendMail.js";
 import jwt from "jsonwebtoken";
 import { normalizeReadingSchedule } from "../utils/readingSchedule.js";
+import { normalizeWeatherLocation } from "../utils/weatherLocation.js";
 
 
 // =============================================
@@ -382,5 +383,32 @@ export const regenerateDeviceKey = catchAsyncErrors(async (req, res, next) => {
     message:
       "Save this key now — it won't be shown again. Flash it into your ESP32 firmware.",
     deviceApiKey: newKey,
+  });
+});
+
+// =============================================
+// Set or clear the user's weather city (dashboard card only)
+// =============================================
+export const updateWeatherLocation = catchAsyncErrors(async (req, res, next) => {
+  let location;
+  try {
+    // null = clear; anything else must pass strict PK-city validation
+    location = normalizeWeatherLocation(req.body.weatherLocation ?? null);
+  } catch (error) {
+    return next(error);
+  }
+
+  const user = await User.findByIdAndUpdate(
+    req.user._id,
+    { $set: { weatherLocation: location } },
+    { new: true, runValidators: true }
+  ).select("-password");
+
+  if (!user) return next(new ErrorHandler("User not found", 404));
+
+  res.status(200).json({
+    success: true,
+    message: location ? "Weather location updated" : "Weather location cleared",
+    user,
   });
 });

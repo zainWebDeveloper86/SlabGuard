@@ -4,7 +4,6 @@ import {
   LuTrendingUp,
   LuTriangleAlert,
   LuCalculator,
-  LuWallet,
   LuInfo,
   LuArrowRight,
   LuZap,
@@ -24,6 +23,7 @@ import {
 } from "recharts";
 import toast from "react-hot-toast";
 import { axiosServerInstance } from "../../axios.js";
+import BudgetGoalCard from "../../components/Common/BudgetGoalCard";
 
 const PendingBadge = ({ note }) => (
   <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest bg-gray-100 dark:bg-gray-800 text-gray-400 px-2 py-1 rounded-full border border-dashed border-gray-300 dark:border-gray-700">
@@ -33,7 +33,6 @@ const PendingBadge = ({ note }) => (
 
 const PredictionBill = () => {
   const navigate = useNavigate();
-  const [budget, setBudget] = useState(5000);
   const [prediction, setPrediction] = useState(null);
   const [threshold, setThreshold] = useState(200);
   const [isLoading, setIsLoading] = useState(true);
@@ -83,7 +82,6 @@ const PredictionBill = () => {
 
   const predictedUnits = prediction?.predictedUnits ?? 0;
   const predictedBill = prediction?.predictedBill ?? 0;
-  const difference = budget - predictedBill;
   const trainingCount = prediction?.daysUsed ?? prediction?.monthsUsed;
   const historyDescription = trainingCount > 0
     ? prediction.modelVersion === "prophet-v1"
@@ -137,6 +135,7 @@ const PredictionBill = () => {
       </div>
 
       {!prediction ? (
+        <>
         <div className="bg-white dark:bg-[#1E293B] rounded-[40px] border border-dashed border-gray-200 dark:border-gray-800 p-12 text-center">
           <LuSparkles className="mx-auto text-gray-300 mb-4" size={40} />
           <p className="text-gray-500 font-bold">
@@ -146,6 +145,8 @@ const PredictionBill = () => {
             moving-average fallback, then hit "Generate My First Prediction".
           </p>
         </div>
+          <div className="max-w-xl"><BudgetGoalCard /></div>
+        </>
       ) : (
         <>
           {/* ================= HERO SECTION ================= */}
@@ -226,49 +227,7 @@ const PredictionBill = () => {
               <LuTrendingUp className="absolute -right-10 -bottom-10 w-64 h-64 opacity-10 group-hover:scale-110 transition-transform duration-700" />
             </div>
 
-            {/* BUDGET CARD — client-side goal tracking, real feature, no backend needed */}
-            <div className="bg-white dark:bg-[#1E293B] p-8 rounded-[40px] border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col justify-between">
-              <div>
-                <h3 className="text-lg font-black dark:text-white flex items-center gap-2 mb-4">
-                  <LuWallet className="text-emerald-500" />
-                  My Budget Goal
-                </h3>
-                <input
-                  type="range"
-                  min="2000"
-                  max="15000"
-                  step="500"
-                  value={budget}
-                  onChange={(e) => setBudget(Number(e.target.value))}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand-blue"
-                />
-                <div className="flex justify-between mt-2 text-sm font-bold text-gray-400">
-                  <span>Rs. 2k</span>
-                  <span className="text-brand-blue">Rs. {budget}</span>
-                  <span>Rs. 15k</span>
-                </div>
-              </div>
-
-              <div
-                className={`mt-6 p-4 rounded-2xl border ${
-                  difference >= 0
-                    ? "bg-emerald-50 border-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/20"
-                    : "bg-red-50 border-red-100 dark:bg-red-500/10 dark:border-red-500/20"
-                }`}
-              >
-                <p
-                  className={`text-xs font-bold leading-tight ${
-                    difference >= 0
-                      ? "text-emerald-700 dark:text-emerald-400"
-                      : "text-red-600 dark:text-red-400"
-                  }`}
-                >
-                  {difference >= 0
-                    ? `Great! You are Rs. ${difference} under your budget.`
-                    : `Warning! You are Rs. ${Math.abs(difference)} over budget.`}
-                </p>
-              </div>
-            </div>
+            <BudgetGoalCard predictedBill={predictedBill} />
           </div>
 
           {/* ================= MAIN GRID ================= */}

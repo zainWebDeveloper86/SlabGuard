@@ -26,6 +26,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { axiosServerInstance } from "../../axios.js";
 import toast from "react-hot-toast";
+import DashboardWeather from "../../components/Common/DashboardWeather";
 
 const PendingBadge = ({ note }) => (
   <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest bg-gray-100 dark:bg-gray-800 text-gray-400 px-2 py-1 rounded-full border border-dashed border-gray-300 dark:border-gray-700">
@@ -115,17 +116,21 @@ const Home = () => {
   return (
     <div className="p-4 md:p-8 space-y-10 animate-in fade-in duration-700">
       {/* ================= HEADER ================= */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-3xl md:text-4xl font-black text-gray-900 dark:text-white tracking-tight">
-          Welcome back,{" "}
-          <span className="text-brand-blue">
-            {!loading ? user?.fullName : "Hi User"}
-          </span>{" "}
-          👋
-        </h1>
-        <p className="text-gray-500 dark:text-gray-400 font-medium">
-          Here's what's happening with your energy consumption today.
-        </p>
+      <div className="flex flex-col lg:flex-row lg:justify-between items-start gap-5">
+        <div className="flex flex-col gap-1 min-w-0">
+          {/* greeting section */}
+          <h1 className="text-3xl md:text-4xl font-black text-gray-900 dark:text-white tracking-tight">
+            Welcome back,{" "}
+            <span className="text-brand-blue">
+              {!loading ? user?.fullName : "Hi User"}
+            </span>{" "}
+            👋
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 font-medium">
+            Here's what's happening with your energy consumption today.
+          </p>
+        </div>
+        <DashboardWeather />
       </div>
 
       <MeterStatusCard />

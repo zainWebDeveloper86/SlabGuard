@@ -20,6 +20,7 @@ import toast from "react-hot-toast";
 import { useAuth } from "../../hooks/useAuth";
 import { axiosServerInstance, backend_url } from "../../axios.js";
 import { useEffect } from "react";
+import WeatherLocationCard from "../../components/Common/WeatherLocationCard";
 
 const getPakistanToday = () => new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Karachi", year: "numeric", month: "2-digit", day: "2-digit",
@@ -453,6 +454,7 @@ const Settings = () => {
                     />
                   </div>
                 </div>
+                <WeatherLocationCard /> 
               </div>
             )}
 

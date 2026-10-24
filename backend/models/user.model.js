@@ -10,6 +10,19 @@ const readingScheduleSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const weatherLocationSchema = new mongoose.Schema(
+  {
+    id: { type: Number, required: true },
+    name: { type: String, required: true },
+    region: { type: String, default: "" },
+    country: { type: String, default: "Pakistan" },
+    countryCode: { type: String, default: "PK" },
+    latitude: { type: Number, required: true },
+    longitude: { type: Number, required: true },
+  },
+  { _id: false }
+);
+
 const userSchema = new mongoose.Schema(
   {
     fullName: {
@@ -39,6 +52,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    weatherLocation: { type: weatherLocationSchema, default: null },
     createdAt: {
       type: Date,
       default: Date.now,
@@ -73,6 +87,16 @@ const userSchema = new mongoose.Schema(
     unitTarget: {
       type: Number, // user's monthly target (e.g., 300 units)
       default: 200,
+    },
+    budgetGoal: {
+      type: Number,
+      default: null,
+      min: 500,
+      max: 50000,
+      validate: {
+        validator: (value) => value === null || Number.isInteger(value),
+        message: "Budget goal must be whole rupees",
+      },
     },
     applianceProfile: {
       type: mongoose.Schema.Types.ObjectId,

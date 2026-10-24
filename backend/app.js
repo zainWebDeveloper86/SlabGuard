@@ -15,6 +15,7 @@ import adminRouter from "./routes/admin.routes.js";
 import alertRouter from "./routes/alert.routes.js";
 import broadcastRouter from "./routes/broadcast.routes.js";
 import supportTicketRouter from "./routes/supportTicket.routes.js";
+import weatherRouter from "./routes/weather.routes.js";
 
 const app = express();
 
@@ -44,6 +45,7 @@ app.use("/api/admin", adminRouter);
 app.use("/api/alerts", alertRouter);
 app.use("/api/broadcast", broadcastRouter);
 app.use("/api/support-tickets", supportTicketRouter);
+app.use("/api/weather", weatherRouter);
 
 // handling middlewares
 app.use(errorMiddleware);
