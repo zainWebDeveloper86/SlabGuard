@@ -7,6 +7,9 @@ import ErrorHandler from "../utils/ErrorHandler.js";
 import { fetchMepcoBill } from "../services/mepcoScraper.service.js";
 import { calculateBill } from "../services/billingEngine.service.js";
 import Tariff from "../models/tariff.model.js";
+import { pakistanDate, pakistanMonthBounds } from "../utils/pakistanTime.js";
+import { isCurrentPrediction } from "../utils/forecastPeriod.js";
+import { recordSystemEvent } from "../services/systemEvents.service.js";
 
 const MONTH_MAP = {
   Jan: 0,
@@ -45,14 +48,11 @@ function monthStringToDate(monthStr) {
   return new Date(year, monthIndex, 1);
 }
 
-// Builds the SAME "Aug26"-style label prediction.controller.js uses for a
-// LIVE, current-cycle Prophet prediction. Kept as a small local duplicate
-// (not shared/imported) to avoid touching prediction.controller.js's
-// already-working code — a tiny bit of repetition is safer than a risky
-// refactor right now.
-function currentMonthLabel() {
-  const now = new Date();
-  return `${MONTH_ABBR[now.getMonth()]}${String(now.getFullYear()).slice(-2)}`;
+// Calendar-month label for recorded dashboard usage. A saved forecast can
+// cover a different period and carries its own explicit dates.
+function currentMonthLabel(now = new Date()) {
+  const [year, month] = pakistanDate(now).split("-");
+  return `${MONTH_ABBR[Number(month) - 1]}${year.slice(-2)}`;
 }
 
 const SYNC_COOLDOWN_MS = 2 * 60 * 1000; // basic anti-abuse guard: 2 min between syncs
@@ -89,6 +89,7 @@ export const syncBilling = catchAsyncErrors(async (req, res, next) => {
     parsed = await fetchMepcoBill(user.referenceNo);
     // console.log(parsed);
   } catch (error) {
+    void recordSystemEvent("billing.sync-failed", { actorId: user._id });
     return next(new ErrorHandler(`Bill sync failed: ${error.message}`, 502));
   }
 
@@ -116,6 +117,7 @@ export const syncBilling = catchAsyncErrors(async (req, res, next) => {
 
   user.lastSyncedAt = new Date();
   await user.save();
+  void recordSystemEvent("billing.synced", { actorId: user._id });
 
   res.status(200).json({
     success: true,
@@ -162,10 +164,10 @@ export const getBillingSummary = catchAsyncErrors(async (req, res, next) => {
   // Cheap DB read, no ML call. This is what makes the dashboard actually
   // "live" — units already consumed in the CURRENT calendar month so far.
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const { start, end } = pakistanMonthBounds(now);
   const daysThisMonth = await DailyUsage.find({
     user: userId,
-    date: { $gte: monthStart },
+    date: { $gte: start, $lt: end },
   });
 
   const actualUnitsSoFar =
@@ -190,13 +192,13 @@ export const getBillingSummary = catchAsyncErrors(async (req, res, next) => {
   // ---- 3. LATEST SAVED PREDICTION for this cycle, if one exists ----
   // READ ONLY. Prophet is only ever triggered by the "Generate" button on
   // PredictionBill.jsx — never automatically on a dashboard page load.
-  const liveMonthLabel = currentMonthLabel();
-  const livePrediction = await Prediction.findOne({
+  const liveMonthLabel = currentMonthLabel(now);
+  const savedPrediction = await Prediction.findOne({
     user: userId,
-    month: liveMonthLabel,
-  });
+  }).sort({ updatedAt: -1 });
+  const livePrediction = isCurrentPrediction(savedPrediction, req.user.readingSchedule, now) ? savedPrediction : null;
 
-  const hasData = !!lastBilledSummary || daysThisMonth.length > 0;
+  const hasData = !!lastBilledSummary || daysThisMonth.length > 0 || !!livePrediction;
 
   if (!hasData) {
     return res.status(200).json({

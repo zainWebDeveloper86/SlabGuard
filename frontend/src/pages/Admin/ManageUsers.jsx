@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   LuSearch,
   LuFilter,
@@ -13,39 +13,45 @@ import {
 import toast from "react-hot-toast";
 import { axiosServerInstance } from "../../axios.js";
 import { UserDetailModal } from "../../components/Admin";
+import { useAuth } from "../../hooks/useAuth";
 
 const ManageUsers = () => {
+  const { user: currentAdmin } = useAuth();
+  const statusLock = useRef(false);
+  const mounted = useRef(true);
+  const [statusBusy, setStatusBusy] = useState(false);
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterRole, setFilterRole] = useState("all");
 
-  const fetchUsers = async () => {
-    try {
-      const res = await axiosServerInstance.get("/admin/users");
-      if (res.data.success) setUsers(res.data.users);
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to load users");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchUsers();
+    let active = true;
+    mounted.current = true;
+    axiosServerInstance.get("/admin/users").then((res) => {
+      if (active && res.data.success) setUsers(res.data.users);
+    }).catch((error) => {
+      if (active) toast.error(error.response?.data?.message || "Failed to load users");
+    }).finally(() => { if (active) setIsLoading(false); });
+    return () => { active = false; mounted.current = false; };
   }, []);
 
   const handleToggleStatus = async (id) => {
+    if (statusLock.current) return;
+    statusLock.current = true;
+    setStatusBusy(true);
     try {
       const res = await axiosServerInstance.patch(`/admin/users/${id}/status`);
+      if (!mounted.current) return;
       if (res.data.success) {
         toast.success(res.data.message);
-        fetchUsers(); // refresh the list so the status dot updates
+        setUsers((previous) => previous.map((user) => user._id === id ? res.data.user : user));
+        setSelectedUser((previous) => previous?._id === id ? res.data.user : previous);
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to update status");
-    }
+      if (mounted.current) toast.error(error.response?.data?.message || "Failed to update status");
+    } finally { statusLock.current = false; if (mounted.current) setStatusBusy(false); }
   };
 
   const filteredUsers = users.filter((u) => {
@@ -193,6 +199,8 @@ const ManageUsers = () => {
                       </button>
                       <button
                         onClick={() => handleToggleStatus(u._id)}
+                        disabled={statusBusy || u._id === currentAdmin?._id}
+                        aria-label={u.isActive ? `Deactivate ${u.fullName}` : `Activate ${u.fullName}`}
                         className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-400 hover:text-red-500 transition cursor-pointer"
                       >
                         <LuUserX size={18} />
@@ -207,6 +215,9 @@ const ManageUsers = () => {
             <UserDetailModal
               user={selectedUser}
               onClose={() => setSelectedUser(null)}
+              onToggleStatus={handleToggleStatus}
+              statusBusy={statusBusy}
+              currentAdminId={currentAdmin?._id}
             />
           )}
         </div>

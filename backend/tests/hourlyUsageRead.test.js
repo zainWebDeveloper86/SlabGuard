@@ -22,8 +22,7 @@ function mockReadings(t, readings) {
 }
 
 function readingAt(hour, units) {
-  const date = new Date("2026-10-20");
-  date.setHours(hour, 0, 0, 0);
+  const date = new Date(`2026-10-20T${String(hour).padStart(2, "0")}:00:00+05:00`);
   return { hour: date, units };
 }
 

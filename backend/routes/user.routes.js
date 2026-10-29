@@ -15,7 +15,7 @@ import {
 } from "../controllers/user.controller.js";
 import { isAuthenticated } from "../middleware/auth.middleware.js";
 import upload from "../multer.js";
-import { updateBudgetGoal } from "../controllers/preferences.controller.js";
+import { updateBudgetGoal, updatePeakReminder } from "../controllers/preferences.controller.js";
 
 const router = express.Router();
 
@@ -29,6 +29,7 @@ router.post("/logout", logoutUser);
 
 router.patch("/profile", isAuthenticated, updateProfile);
 router.patch("/budget-goal", isAuthenticated, updateBudgetGoal);
+router.patch("/peak-reminder", isAuthenticated, updatePeakReminder);
 router.patch("/weather-location", isAuthenticated, updateWeatherLocation);
 router.patch("/avatar", isAuthenticated, upload.single("avatar"), updateAvatar);
 router.patch("/change-password", isAuthenticated, changePassword);

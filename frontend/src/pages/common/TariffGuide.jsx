@@ -4,7 +4,6 @@ import {
   LuInfo,
   LuFileText,
   LuCircleAlert,
-  LuClock,
   LuExternalLink,
   LuPencilLine,
   LuCheck,
@@ -16,6 +15,7 @@ import {
 import toast from "react-hot-toast";
 import { useAuth } from "../../hooks/useAuth";
 import { axiosServerInstance } from "../../axios.js";
+import SeasonalPeakSchedule from "../../components/Common/SeasonalPeakSchedule";
 
 const lifelineColor = () => "text-emerald-600"; // most-subsidized tier, always this color
 const protectedColor = () => "text-emerald-500";
@@ -43,17 +43,6 @@ const TariffGuide = () => {
   const [editTax, setEditTax] = useState({ index: null });
   const [tempVal, setTempVal] = useState("");
 
-  const [peakHours, setPeakHours] = useState({
-    startHour: 18,
-    endHour: 22,
-    rateMultiplier: 1.25,
-  });
-  const [editPeak, setEditPeak] = useState(false);
-  const [tempPeak, setTempPeak] = useState({
-    startHour: 18,
-    endHour: 22,
-    rateMultiplier: 1.25,
-  });
 
   useEffect(() => {
     const fetchTariff = async () => {
@@ -66,9 +55,8 @@ const TariffGuide = () => {
           setNonProtectedSlabs(t.nonProtectedSlabs);
           setFixedCharges(t.fixedCharges);
           setTaxes(t.taxes);
-          if (t.peakHours) setPeakHours(t.peakHours);
         }
-      } catch (error) {
+      } catch {
         toast.error("Failed to load tariff data");
       } finally {
         setIsLoading(false);
@@ -144,17 +132,6 @@ const TariffGuide = () => {
     setEditTax({ index: null });
   };
 
-  const formatHour = (h) => {
-    const period = h >= 12 ? "PM" : "AM";
-    const displayHour = h % 12 === 0 ? 12 : h % 12;
-    return `${String(displayHour).padStart(2, "0")}:00 ${period}`;
-  };
-
-  const handlePeakSave = () => {
-    setPeakHours(tempPeak);
-    persist({ peakHours: tempPeak });
-    setEditPeak(false);
-  };
 
   // ✅ description is now a parameter, not a hardcoded ternary — supports 3 types cleanly
   const renderSlabTable = (slabs, title, icon, type, colorFn, description) => (
@@ -445,120 +422,7 @@ const TariffGuide = () => {
             </div>
           </div>
 
-          <div className="bg-amber-50 dark:bg-amber-500/5 border border-amber-100 dark:border-amber-500/20 p-6 rounded-[40px] flex items-start gap-4 relative overflow-hidden group">
-            <LuClock className="text-amber-500 shrink-0" size={28} />
-            <div className="relative z-10 flex-1">
-              <div className="flex items-center justify-between mb-1">
-                <h4 className="text-lg font-black text-amber-900 dark:text-amber-400">
-                  Peak Hours Schedule
-                </h4>
-                {isAdmin && !editPeak && (
-                  <button
-                    onClick={() => {
-                      setTempPeak(peakHours);
-                      setEditPeak(true);
-                    }}
-                    className="p-1.5 text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-500/10 rounded-lg transition cursor-pointer"
-                  >
-                    <LuPencilLine size={16} />
-                  </button>
-                )}
-              </div>
-              <p className="text-[10px] font-bold text-amber-600/70 dark:text-amber-400/60 uppercase tracking-widest mb-2">
-                Applies to Three-Phase (ToU) consumers only
-              </p>
-              {editPeak ? (
-                <div className="space-y-3 animate-in zoom-in-95">
-                  <div className="flex items-center gap-3">
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 block mb-1">
-                        Start Hour (0-23)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="23"
-                        value={tempPeak.startHour}
-                        onChange={(e) =>
-                          setTempPeak({
-                            ...tempPeak,
-                            startHour: Number(e.target.value),
-                          })
-                        }
-                        className="w-20 bg-white dark:bg-gray-900 border border-amber-200 dark:border-amber-500/20 rounded-lg px-2 py-1 text-center font-black text-amber-700 outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 block mb-1">
-                        End Hour (0-23)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="23"
-                        value={tempPeak.endHour}
-                        onChange={(e) =>
-                          setTempPeak({
-                            ...tempPeak,
-                            endHour: Number(e.target.value),
-                          })
-                        }
-                        className="w-20 bg-white dark:bg-gray-900 border border-amber-200 dark:border-amber-500/20 rounded-lg px-2 py-1 text-center font-black text-amber-700 outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 block mb-1">
-                        Rate Multiplier
-                      </label>
-                      <input
-                        type="number"
-                        step="0.05"
-                        min="1"
-                        value={tempPeak.rateMultiplier}
-                        onChange={(e) =>
-                          setTempPeak({
-                            ...tempPeak,
-                            rateMultiplier: Number(e.target.value),
-                          })
-                        }
-                        className="w-20 bg-white dark:bg-gray-900 border border-amber-200 dark:border-amber-500/20 rounded-lg px-2 py-1 text-center font-black text-amber-700 outline-none"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handlePeakSave}
-                      className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500 hover:text-white transition cursor-pointer"
-                    >
-                      <LuCheck size={16} />
-                    </button>
-                    <button
-                      onClick={() => setEditPeak(false)}
-                      className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition cursor-pointer"
-                    >
-                      <LuX size={16} />
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-amber-800/80 dark:text-amber-400/70 leading-relaxed font-medium">
-                  Current timing: <br />
-                  <span className="text-amber-600 dark:text-amber-300 font-black text-lg">
-                    {formatHour(peakHours.startHour)} –{" "}
-                    {formatHour(peakHours.endHour)}
-                  </span>
-                  <br />
-                  <span className="text-xs font-bold opacity-70">
-                    {Math.round((peakHours.rateMultiplier - 1) * 100)}%
-                    surcharge during this window
-                  </span>
-                </p>
-              )}
-            </div>
-            <div className="absolute right-0 top-0 p-6 text-amber-500/10 group-hover:scale-110 transition-transform">
-              <LuClock size={100} />
-            </div>
-          </div>
+          <SeasonalPeakSchedule />
         </div>
       </div>
 

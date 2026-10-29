@@ -27,6 +27,9 @@ import { useAuth } from "../../hooks/useAuth";
 import { axiosServerInstance } from "../../axios.js";
 import toast from "react-hot-toast";
 import DashboardWeather from "../../components/Common/DashboardWeather";
+import PeakHoursCountdown from "../../components/Common/PeakHoursCountdown";
+import ForecastPeriodDetails from "../../components/Common/ForecastPeriodDetails";
+import { predictionPeriodLabel } from "../../utils/predictionPeriod.js";
 
 const PendingBadge = ({ note }) => (
   <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest bg-gray-100 dark:bg-gray-800 text-gray-400 px-2 py-1 rounded-full border border-dashed border-gray-300 dark:border-gray-700">
@@ -42,7 +45,11 @@ const SourceBadge = ({ note }) => (
 
 const formatDateLabel = (isoDate) => {
   const d = new Date(isoDate);
-  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+  return d.toLocaleDateString("en-GB", {
+    timeZone: "Asia/Karachi",
+    day: "2-digit",
+    month: "short",
+  });
 };
 
 const StatCard = ({ title, value, unit, icon, color, bg }) => (
@@ -135,26 +142,7 @@ const Home = () => {
 
       <MeterStatusCard />
 
-      {/* PEAK HOUR COUNTDOWN — still pending */}
-      {user?.meterType !== "single" && (
-        <div className="relative bg-amber-100/50 dark:bg-amber-900/20 border-2 border-dashed border-amber-200 dark:border-amber-800 p-4 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="absolute top-3 right-3">
-            <PendingBadge note="Peak-hours config in Tariff model" />
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="w-3 h-3 bg-amber-500 rounded-full animate-ping"></div>
-            <p className="text-sm font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest">
-              Next Peak Window: 6:00 PM – 10:00 PM
-            </p>
-          </div>
-          <div className="text-xs font-bold text-gray-500 dark:text-gray-400">
-            Starts in:{" "}
-            <span className="bg-white dark:bg-gray-800 px-3 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white ml-2">
-              03h 45m 12s
-            </span>
-          </div>
-        </div>
-      )}
+      <PeakHoursCountdown />
 
       {/* ================= STATS GRID — now LIVE, not last-bill ================= */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -182,7 +170,7 @@ const Home = () => {
             <StatCard
               title="Projected Bill"
               value={prediction ? `₨ ${prediction.predictedBill}` : "—"}
-              unit={prediction ? "AI Forecast" : "Not generated yet"}
+              unit={prediction ? predictionPeriodLabel(prediction) : "Not generated yet"}
               icon={<LuChartLine size={20} />}
               color="text-emerald-500"
               bg="bg-emerald-50 dark:bg-emerald-500/10"
@@ -309,11 +297,11 @@ const Home = () => {
               </div>
               <LuTriangleAlert className="text-brand-blue mb-4" size={28} />
               <h4 className="text-lg font-black text-gray-900 dark:text-white mb-2">
-                Peak Hour Alert
+                Understand Your Usage
               </h4>
               <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                Usage peaks between **7:00 PM – 10:00 PM**. Shifting heavy loads
-                can save you significant costs.
+                Review your hourly usage chart to see when you use the most
+                electricity and identify flexible loads you can reschedule.
               </p>
             </div>
 
@@ -355,7 +343,7 @@ const Home = () => {
           </div>
 
           {/* THIS MONTH: SO FAR vs PROJECTED — replaces the old fake "Financial Impact" table */}
-          <div className="bg-white dark:bg-[#1E293B] rounded-[40px] border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm">
+          {/* <div className="bg-white dark:bg-[#1E293B] rounded-[40px] border border-gray-100 dark:border-gray-800 overflow-auto shadow-sm">
             <div className="p-8">
               <h3 className="text-xl font-black text-gray-900 dark:text-white">
                 This Month's Trajectory
@@ -370,9 +358,9 @@ const Home = () => {
                 <thead className="bg-gray-50 dark:bg-gray-800 text-gray-400 text-[10px] uppercase tracking-widest font-black">
                   <tr>
                     <th className="px-8 py-4 text-left">Stage</th>
-                    <th className="px-8 py-4 text-center">Units</th>
+                    <th className="px-6 py-4 text-center">Units</th>
                     <th className="px-8 py-4 text-center">Bill</th>
-                    <th className="px-8 py-4 text-right">Status</th>
+                    <th className="px-10 py-4 text-right">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
@@ -386,7 +374,7 @@ const Home = () => {
                     <td className="px-8 py-6 text-center text-gray-400 font-bold text-xs">
                       Partial month — billing is monthly
                     </td>
-                    <td className="px-8 py-6 text-right">
+                    <td className="px-10 py-6 text-right">
                       <span className="bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 px-3 py-1.5 rounded-full text-[10px] font-black uppercase">
                         In Progress
                       </span>
@@ -436,6 +424,154 @@ const Home = () => {
                           Generate a prediction
                         </Link>{" "}
                         to see your projected month-end.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div> */}
+
+          {/* THIS MONTH: SO FAR vs PROJECTED — Modern Redesign */}
+          <div className="bg-white dark:bg-[#1E293B] rounded-[40px] border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm">
+            {/* Header */}
+            <div className="p-8 border-b border-gray-50 dark:border-gray-800">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-black text-gray-900 dark:text-white">
+                    Recorded Usage &amp; Forecast
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    Recorded usage below is for this calendar month. Forecast dates are shown separately.
+                  </p>
+                  {prediction && <div className="text-gray-500 dark:text-gray-400"><ForecastPeriodDetails prediction={prediction} /></div>}
+                </div>
+                <div className="hidden sm:flex w-12 h-12 rounded-2xl bg-brand-blue/10 text-brand-blue items-center justify-center shrink-0">
+                  <LuChartLine size={24} />
+                </div>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-195">
+                <thead className="bg-gray-50/50 dark:bg-gray-800/30 text-gray-400 text-[10px] uppercase tracking-widest font-black">
+                  <tr>
+                    <th className="px-8 py-4 text-left">Stage</th>
+                    <th className="px-6 py-4 text-center">Units</th>
+                    <th className="px-8 py-4 text-center">Est. Bill</th>
+                    <th className="px-8 py-4 text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
+                  {/* Row 1: So Far */}
+                  <tr className="hover:bg-gray-50/50 dark:hover:bg-gray-800/20 transition">
+                    <td className="px-8 py-6">
+                      <div className="flex items-center gap-3">
+                        {/* <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
+                          <LuZap size={18} />
+                        </div> */}
+                        <div>
+                          <p className="font-bold text-gray-800 dark:text-gray-200">
+                            So Far
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {daysLogged} day{daysLogged === 1 ? "" : "s"} logged
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-6 text-center">
+                      <span className="text-2xl font-black text-gray-900 dark:text-white">
+                        {consumedSoFar}
+                      </span>
+                    </td>
+                    <td className="px-8 py-6 text-center text-gray-400 text-xs font-bold italic">
+                      Calendar month so far
+                    </td>
+                    <td className="px-8 py-6 text-right">
+                      <span className="inline-flex items-center gap-1.5 bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 px-3 py-1.5 rounded-full text-[10px] font-black uppercase">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                        In Progress
+                      </span>
+                    </td>
+                  </tr>
+
+                  {/* Row 2: Projected */}
+                  {prediction ? (
+                    <tr className="hover:bg-gray-50/50 dark:hover:bg-gray-800/20 transition">
+                      <td className="px-8 py-6">
+                        <div className="flex items-center gap-3">
+                          {/* <div
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                              prediction.category === "protected"
+                                ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500"
+                                : "bg-red-50 dark:bg-red-500/10 text-red-500"
+                            }`}
+                          >
+                            <LuChartLine size={18} />
+                          </div> */}
+                          <div>
+                            <p className="font-bold text-gray-800 dark:text-gray-200">
+                              {predictionPeriodLabel(prediction)}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              Model score: {prediction.confidence}% (heuristic)
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-6 text-center">
+                        <span className="text-2xl font-black text-gray-900 dark:text-white">
+                          {prediction.predictedUnits}
+                        </span>
+                      </td>
+                      <td
+                        className={`px-8 py-6 text-center font-black ${
+                          prediction.category === "protected"
+                            ? "text-emerald-500"
+                            : "text-red-500"
+                        }`}
+                      >
+                        ₨ {prediction.predictedBill}
+                      </td>
+                      <td className="px-8 py-6 text-right">
+                        <span
+                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-black uppercase ${
+                            prediction.category === "protected"
+                              ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400"
+                              : "bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-400"
+                          }`}
+                        >
+                          {prediction.category === "protected"
+                            ? "✓ Safe"
+                            : "⚠ Danger"}
+                        </span>
+                      </td>
+                    </tr>
+                  ) : (
+                    /* Empty State — Clickable Card */
+                    <tr>
+                      <td colSpan={4} className="p-8">
+                        <Link
+                          to="/predict"
+                          className="flex flex-col sm:flex-row items-center justify-center gap-3 p-5 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-700 hover:border-brand-blue/40 hover:bg-brand-blue/5 transition group"
+                        >
+                          <LuSparkles
+                            className="text-brand-blue group-hover:scale-110 transition"
+                            size={22}
+                          />
+                          <span className="text-sm font-bold text-gray-600 dark:text-gray-400 text-center">
+                            <span className="text-brand-blue">
+                              Generate a prediction
+                            </span>{" "}
+                            to see your estimated billing period
+                          </span>
+                          <LuArrowRight
+                            className="text-brand-blue group-hover:translate-x-1 transition"
+                            size={16}
+                          />
+                        </Link>
                       </td>
                     </tr>
                   )}
@@ -515,7 +651,7 @@ const Home = () => {
             </div>
             {prediction ? (
               <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-6">
-                Based on your usage this month, you're projected to finish at
+                For the forecast period shown above, estimated consumption is
                 <span
                   className={`font-bold ${prediction.category === "protected" ? "text-emerald-500" : "text-red-500"}`}
                 >

@@ -11,6 +11,7 @@ import { BsUpcScan, BsSpeedometer } from "react-icons/bs";
 import toast from "react-hot-toast";
 import { useAuth } from "../../hooks/useAuth";
 import { axiosServerInstance } from "../../axios.js";
+import ReadingStatus from "./ReadingStatus";
 
 const MeterStatusCard = () => {
   const { user } = useAuth();
@@ -51,13 +52,14 @@ const MeterStatusCard = () => {
             <div className="flex flex-wrap items-center gap-2 mb-1">
               {hasReference ? (
                 <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full font-bold whitespace-nowrap">
-                  <LuCircleCheck size={10} /> CONNECTED
+                  <LuCircleCheck size={10} /> MEPCO REFERENCE SAVED
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 text-[10px] bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full font-bold whitespace-nowrap">
-                  <LuCircleAlert size={10} /> NOT LINKED
+                  <LuCircleAlert size={10} /> MEPCO NOT LINKED
                 </span>
               )}
+              {/* <ReadingStatus /> */}
             </div>
             <p className="text-base sm:text-lg md:text-xl font-black text-gray-900 dark:text-white tracking-tight">
               {user?.referenceNo
@@ -128,6 +130,10 @@ const MeterStatusCard = () => {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="flex justify-end mt-4">
+        <ReadingStatus />
       </div>
     </div>
   );

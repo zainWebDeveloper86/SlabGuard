@@ -46,11 +46,13 @@ async function sendReading(units, timestamp) {
 }
 
 async function backfill(days) {
-  console.log(`Backfilling ${days} days of simulated hourly data...`);
+  // console.log(`Backfilling ${days} completed days of simulated hourly data ...`);
+  console.log(`Backfilling ${days} completed days of simulated hourly data (excluding today)...`);
   const now = new Date();
   let count = 0;
 
-  for (let d = days; d >= 0; d--) {
+  // for (let d = days; d >= 0; d--) {
+  for (let d = days; d > 0; d--) {
     for (let h = 0; h < 24; h++) {
       const timestamp = new Date(now);
       timestamp.setDate(timestamp.getDate() - d);

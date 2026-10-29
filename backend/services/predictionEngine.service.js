@@ -1,25 +1,26 @@
 import BillHistory from "../models/billHistory.model.js";
 
-// (yeh existing imports ke sath — file ke top pe)
 import DailyUsage from "../models/dailyUsage.model.js";
 import { callProphetService } from "./prophetClient.service.js";
+import { resolveForecastPeriod } from "../utils/forecastPeriod.js";
+import { shiftPakistanDate } from "../utils/pakistanTime.js";
+import { recordSystemEvent } from "./systemEvents.service.js";
 
 const MIN_DAILY_POINTS_FOR_PROPHET = 10;
 
 // DailyUsage dates are interpreted in the consumer's timezone, independent
-// of the server's timezone. The current component still targets calendar months.
+// of the server's timezone.
 const pakistanDay = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Karachi", year: "numeric", month: "2-digit", day: "2-digit",
 });
 
-export async function predictCurrentMonthProjection(userId, now = new Date()) {
+export async function predictCurrentMonthProjection(userId, now = new Date(), schedule = {}) {
   const today = pakistanDay.format(now);
-  const [year, month] = today.split("-").map(Number);
-  const monthPrefix = today.slice(0, 7);
-  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  const targetDates = Array.from({ length: daysInMonth }, (_, i) =>
-    monthPrefix + "-" + String(i + 1).padStart(2, "0"),
-  );
+  const period = resolveForecastPeriod(schedule, now);
+  const targetDates = [];
+  for (let ds = period.startDate; ds <= period.endDate; ds = shiftPakistanDate(ds, 1)) {
+    targetDates.push(ds);
+  }
   const allDaily = await DailyUsage.find({ user: userId }).sort({ date: 1 });
 
   // Today's daily aggregate can be partial. Incomplete past days are also
@@ -44,16 +45,17 @@ export async function predictCurrentMonthProjection(userId, now = new Date()) {
 
   let forecastResult;
   try {
-    forecastResult = await callProphetService(history, daysInMonth, {
+    forecastResult = await callProphetService(history, targetDates.length, {
       forecastStart: targetDates[0], forecastEnd: targetDates.at(-1),
     });
   } catch (error) {
+    void recordSystemEvent("forecast.failed", { actorId: userId });
     console.error("[Prophet] Microservice call failed:", error.message);
     return null;
   }
 
   // Reject incomplete or incompatible responses instead of presenting a
-  // short forecast as a complete month. This also detects an old Python server.
+  // short forecast as a complete period. This also detects an old Python server.
   const points = forecastResult?.forecast;
   if (!Array.isArray(points) || points.length !== targetDates.length) return null;
   const byDate = new Map();
@@ -70,7 +72,11 @@ export async function predictCurrentMonthProjection(userId, now = new Date()) {
   const actualUnits = measuredDates.reduce((sum, ds) => sum + observed.get(ds).y, 0);
   const estimatedPoints = estimatedDates.map((ds) => byDate.get(ds));
   const estimatedUnits = estimatedPoints.reduce((sum, point) => sum + point.yhat, 0);
-  const predictedUnits = Math.round(actualUnits + estimatedUnits);
+  // Daily aggregates and Python estimates use two decimal places. Restore
+  // that precision before whole-unit rounding so 128.50 cannot become 128
+  // because floating-point addition produced 128.49999999999997.
+  const totalUnits = Math.round((actualUnits + estimatedUnits) * 100) / 100;
+  const predictedUnits = Math.round(totalUnits);
 
   // This is a heuristic uncertainty score, not a measured accuracy percentage.
   // Compare daily width with daily predicted usage so a longer horizon does
@@ -87,8 +93,7 @@ export async function predictCurrentMonthProjection(userId, now = new Date()) {
     modelVersion: forecastResult.modelVersion,
     usedTemperatureRegressor: forecastResult.usedTemperatureRegressor,
     projection: {
-      periodType: "calendar-month", timeZone: "Asia/Karachi",
-      startDate: targetDates[0], endDate: targetDates.at(-1),
+      ...period,
       observedDays: measuredDates.length, estimatedDays: estimatedDates.length,
       estimatedPastDays: estimatedDates.filter((ds) => ds < today).length,
       forecastDays: estimatedDates.filter((ds) => ds >= today).length,

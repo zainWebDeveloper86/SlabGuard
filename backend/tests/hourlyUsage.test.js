@@ -31,6 +31,22 @@ for (const [name, body] of [
   ["empty date", { units: 1, timestamp: "" }],
   ["null date", { units: 1, timestamp: null }],
   ["boolean date", { units: 1, timestamp: true }],
+  ["impossible February date", { units: 1, timestamp: "2026-02-30T08:25:30Z" }],
+  ["non-leap February 29", { units: 1, timestamp: "2026-02-29T08:25:30+05:00" }],
+  ["April 31", { units: 1, timestamp: "2026-04-31T08:25:30-04:00" }],
+  ["zero day", { units: 1, timestamp: "2026-10-00T08:25:30Z" }],
+  ["zero month", { units: 1, timestamp: "2026-00-20T08:25:30Z" }],
+  ["month 13", { units: 1, timestamp: "2026-13-20T08:25:30Z" }],
+  ["timezone-free timestamp", { units: 1, timestamp: "2026-10-20T08:25:30" }],
+  ["date only", { units: 1, timestamp: "2026-10-20" }],
+  ["numeric timestamp string", { units: 1, timestamp: "1792484730000" }],
+  ["24-hour rollover", { units: 1, timestamp: "2026-10-20T24:00:00Z" }],
+  ["minute 60", { units: 1, timestamp: "2026-10-20T08:60:00Z" }],
+  ["second 60", { units: 1, timestamp: "2026-10-20T08:25:60Z" }],
+  ["invalid offset hour", { units: 1, timestamp: "2026-10-20T08:25:30+24:00" }],
+  ["invalid offset minute", { units: 1, timestamp: "2026-10-20T08:25:30+05:60" }],
+  ["infinite timestamp", { units: 1, timestamp: Infinity }],
+  ["out-of-range numeric timestamp", { units: 1, timestamp: 8640000000000001 }],
   ["unknown source", { units: 1, source: "unknown" }],
   ["empty source", { units: 1, source: "" }],
   ["null source", { units: 1, source: null }],
@@ -55,7 +71,7 @@ for (const [name, units, source] of [
     const [filter, update, options] = write.mock.calls[0].arguments;
     assert.equal(filter.user, "test-user");
     const expectedHour = new Date(timestamp);
-    expectedHour.setMinutes(0, 0, 0);
+    expectedHour.setUTCMinutes(0, 0, 0);
     assert.equal(filter.hour.getTime(), expectedHour.getTime());
     assert.equal(update.$set.units, Number(units));
     assert.equal(update.$set.source, source);
@@ -67,12 +83,31 @@ for (const [name, units, source] of [
 test("omitted timestamp and source keep their defaults", async (t) => {
   const write = t.mock.method(HourlyUsage, "findOneAndUpdate", async () => ({}));
   const before = new Date();
-  before.setMinutes(0, 0, 0);
+  before.setUTCMinutes(0, 0, 0);
   const result = await invoke({ units: 1 });
   const after = new Date();
-  after.setMinutes(0, 0, 0);
+  after.setUTCMinutes(0, 0, 0);
   assert.equal(result.status, 200);
   const [, update] = write.mock.calls[0].arguments;
   assert.equal(update.$set.source, "simulator");
   assert.ok(update.$set.hour >= before && update.$set.hour <= after);
 });
+
+for (const [value, expectedHour] of [
+  ["2026-10-20T08:25:30Z", "2026-10-20T08:00:00.000Z"],
+  ["2026-10-20T13:25:30+05:00", "2026-10-20T08:00:00.000Z"],
+  ["2026-10-20T04:25:30-04:00", "2026-10-20T08:00:00.000Z"],
+  ["2026-10-20T08:25Z", "2026-10-20T08:00:00.000Z"],
+  ["2024-02-29T00:10:00+05:00", "2024-02-28T19:00:00.000Z"],
+  ["2026-12-31T23:59:59-04:00", "2027-01-01T03:00:00.000Z"],
+  ["2026-10-20T08:25:30.123456Z", "2026-10-20T08:00:00.000Z"],
+  [Date.parse(timestamp), "2026-10-20T08:00:00.000Z"],
+  [0, "1970-01-01T00:00:00.000Z"],
+]) {
+  test(`accepts unambiguous timestamp ${value} at the correct UTC hour`, async (t) => {
+    const write = t.mock.method(HourlyUsage, "findOneAndUpdate", async () => ({}));
+    const result = await invoke({ units: 1, timestamp: value });
+    assert.equal(result.status, 200);
+    assert.equal(write.mock.calls[0].arguments[0].hour.toISOString(), expectedHour);
+  });
+}

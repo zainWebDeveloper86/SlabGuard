@@ -21,10 +21,28 @@ import { useAuth } from "../../hooks/useAuth";
 import { axiosServerInstance, backend_url } from "../../axios.js";
 import { useEffect } from "react";
 import WeatherLocationCard from "../../components/Common/WeatherLocationCard";
+import PeakReminderSetting from "../../components/Common/PeakReminderSetting";
 
-const getPakistanToday = () => new Intl.DateTimeFormat("en-CA", {
-  timeZone: "Asia/Karachi", year: "numeric", month: "2-digit", day: "2-digit",
-}).format(new Date());
+const DEFAULT_APPLIANCE_FORM = {
+  ac_qty: 0,
+  ac_type: "Inverter",
+  ac_ton: "1.5",
+  fridge_qty: 1,
+  oven_type: "Microwave",
+  water_pump_hrs: "1-2 Hours",
+  geyser_type: "Gas",
+  washing_machine_freq: "3 times a week",
+  occupancy: "Occupied",
+  consentToAlerts: false,
+};
+
+const getPakistanToday = () =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Karachi",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 
 const Settings = () => {
   const { user, login } = useAuth();
@@ -43,7 +61,11 @@ const Settings = () => {
     meterType: "single",
     sanctionedLoad: 0,
     unitTarget: 300,
-    readingSchedule: { lastConfirmedReadingDate: "", expectedDayFrom: "", expectedDayTo: "" },
+    readingSchedule: {
+      lastConfirmedReadingDate: "",
+      expectedDayFrom: "",
+      expectedDayTo: "",
+    },
   });
 
   useEffect(() => {
@@ -58,7 +80,8 @@ const Settings = () => {
       sanctionedLoad: user.sanctionedLoad ?? 0,
       unitTarget: user.unitTarget ?? 300,
       readingSchedule: {
-        lastConfirmedReadingDate: user.readingSchedule?.lastConfirmedReadingDate ?? "",
+        lastConfirmedReadingDate:
+          user.readingSchedule?.lastConfirmedReadingDate ?? "",
         expectedDayFrom: user.readingSchedule?.expectedDayFrom ?? "",
         expectedDayTo: user.readingSchedule?.expectedDayTo ?? "",
       },
@@ -160,20 +183,29 @@ const Settings = () => {
       );
       return;
     }
-    const { lastConfirmedReadingDate, expectedDayFrom, expectedDayTo } = electricityForm.readingSchedule;
+    const { lastConfirmedReadingDate, expectedDayFrom, expectedDayTo } =
+      electricityForm.readingSchedule;
     if ((expectedDayFrom === "") !== (expectedDayTo === "")) {
       toast.error("Enter both expected reading days, or leave both blank");
       return;
     }
-    if (expectedDayFrom !== "" && (
-      !Number.isInteger(Number(expectedDayFrom)) || !Number.isInteger(Number(expectedDayTo)) ||
-      Number(expectedDayFrom) < 1 || Number(expectedDayTo) > 31 ||
-      Number(expectedDayFrom) > Number(expectedDayTo)
-    )) {
-      toast.error("Enter a reading window from 1 to 31, with the start day before or equal to the end day");
+    if (
+      expectedDayFrom !== "" &&
+      (!Number.isInteger(Number(expectedDayFrom)) ||
+        !Number.isInteger(Number(expectedDayTo)) ||
+        Number(expectedDayFrom) < 1 ||
+        Number(expectedDayTo) > 31 ||
+        Number(expectedDayFrom) > Number(expectedDayTo))
+    ) {
+      toast.error(
+        "Enter a reading window from 1 to 31, with the start day before or equal to the end day",
+      );
       return;
     }
-    if (lastConfirmedReadingDate && lastConfirmedReadingDate > getPakistanToday()) {
+    if (
+      lastConfirmedReadingDate &&
+      lastConfirmedReadingDate > getPakistanToday()
+    ) {
       toast.error("Last confirmed reading date cannot be in the future");
       return;
     }
@@ -200,53 +232,58 @@ const Settings = () => {
 
   // ---------------- Appliances ----------------
 
-  // Inside Settings component, after electricityForm state
-  const [applianceForm, setApplianceForm] = useState({
-    ac_qty: 0,
-    ac_type: "Inverter",
-    ac_ton: "1.5",
-    fridge_qty: 1,
-    oven_type: "Microwave",
-    water_pump_hrs: "1-2 Hours",
-    geyser_type: "Gas",
-    washing_machine_freq: "3 times a week",
-    occupancy: "Occupied",
-    consentToAlerts: false,
-  });
+  const [applianceForm, setApplianceForm] = useState(() => ({ ...DEFAULT_APPLIANCE_FORM }));
+  const [applianceLoad, setApplianceLoad] = useState({ status: "loading", userId: null });
+  const [applianceRetry, setApplianceRetry] = useState(0);
+  const applianceLoadedFor = useRef(null);
+  const appliancesReady = applianceLoad.status === "ready" && applianceLoad.userId === user?._id;
+  const applianceLoadError = applianceLoad.status === "error" && applianceLoad.userId === user?._id;
 
   // Fetch existing appliance profile when tab becomes active
   useEffect(() => {
-    if (activeTab === "appliances") {
-      const fetchApplianceProfile = async () => {
-        try {
-          const res = await axiosServerInstance.get("/appliance-profile/me");
-          if (res.data.success && res.data.hasProfile) {
-            const profile = res.data.profile;
+    if (activeTab !== "appliances" || !user?._id) return;
+    let active = true;
+    const userId = user._id;
+    applianceLoadedFor.current = null;
+    axiosServerInstance.get("/appliance-profile/me", { timeout: 10000 }).then((res) => {
+      if (!active) return;
+      if (res.data?.success !== true || typeof res.data.hasProfile !== "boolean" ||
+          (res.data.hasProfile && (!res.data.profile || typeof res.data.profile !== "object" || Array.isArray(res.data.profile))) ||
+          (!res.data.hasProfile && res.data.profile != null)) {
+        throw new Error("Invalid appliance profile response");
+      }
+      if (res.data.hasProfile) {
+        const profile = res.data.profile;
 
-            // Map camelCase from DB → snake_case for frontend state
-            setApplianceForm({
-              ac_qty: profile.acQty || 0,
-              ac_type: profile.acType || "Inverter",
-              ac_ton: profile.acTonnage || "1.5",
-              fridge_qty: profile.fridgeQty ?? 1,
-              oven_type: profile.ovenType || "Microwave",
-              water_pump_hrs: profile.waterPumpHours || "1-2 Hours",
-              geyser_type: profile.geyserType || "Gas",
-              washing_machine_freq:
-                profile.washingMachineFreq || "3 times a week",
-              occupancy: profile.occupancy || "Occupied",
-              consentToAlerts: profile.consentToAlerts || false,
-            });
-          }
-        } catch (error) {
-          console.error("Failed to fetch appliance profile:", error);
-        }
-      };
-      fetchApplianceProfile();
-    }
-  }, [activeTab]); // runs every time tab changes
+        // Map camelCase from DB → snake_case for frontend state
+        setApplianceForm({
+          ac_qty: profile.acQty || 0,
+          ac_type: profile.acType || "Inverter",
+          ac_ton: profile.acTonnage || "1.5",
+          fridge_qty: profile.fridgeQty ?? 1,
+          oven_type: profile.ovenType || "Microwave",
+          water_pump_hrs: profile.waterPumpHours || "1-2 Hours",
+          geyser_type: profile.geyserType || "Gas",
+          washing_machine_freq: profile.washingMachineFreq || "3 times a week",
+          occupancy: profile.occupancy || "Occupied",
+          consentToAlerts: profile.consentToAlerts || false,
+        });
+      } else {
+        setApplianceForm({ ...DEFAULT_APPLIANCE_FORM });
+      }
+      applianceLoadedFor.current = userId;
+      setApplianceLoad({ status: "ready", userId });
+    }).catch(() => {
+      if (active) setApplianceLoad({ status: "error", userId });
+    });
+    return () => { active = false; applianceLoadedFor.current = null; };
+  }, [activeTab, user?._id, applianceRetry]);
 
   const saveAppliances = async () => {
+    if (!appliancesReady || applianceLoadedFor.current !== user?._id) {
+      toast.error("Load the appliance profile successfully before saving. Retry if loading failed.");
+      return;
+    }
     setSavingTab("appliances");
     try {
       const res = await axiosServerInstance.put("/appliance-profile", {
@@ -352,7 +389,13 @@ const Settings = () => {
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => {
+                if (tab.id === "appliances" && activeTab !== "appliances") {
+                  applianceLoadedFor.current = null;
+                  setApplianceLoad({ status: "loading", userId: user?._id });
+                }
+                setActiveTab(tab.id);
+              }}
               className={`outline-none cursor-pointer flex items-center gap-3 px-6 py-4 rounded-2xl font-bold text-sm transition-all whitespace-nowrap ${
                 activeTab === tab.id
                   ? "bg-brand-blue text-white shadow-lg shadow-blue-500/30"
@@ -365,7 +408,7 @@ const Settings = () => {
         </div>
 
         {/* MAIN CONTENT */}
-        <div className="flex-1 bg-white dark:bg-[#1E293B] rounded-[40px] border border-gray-100 dark:border-gray-800 p-6 md:p-10 shadow-sm min-h-[500px] flex flex-col">
+        <div className="flex-1 bg-white dark:bg-[#1E293B] rounded-[40px] border border-gray-100 dark:border-gray-800 p-6 md:p-10 shadow-sm min-h-125 flex flex-col">
           <div className="flex-1">
             {/* --- PROFILE --- */}
             {activeTab === "profile" && (
@@ -454,7 +497,7 @@ const Settings = () => {
                     />
                   </div>
                 </div>
-                <WeatherLocationCard /> 
+                <WeatherLocationCard />
               </div>
             )}
 
@@ -553,63 +596,105 @@ const Settings = () => {
                     Meter Reading Schedule (Optional)
                   </legend>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Enter the last date your utility reader actually recorded the meter, and the
-                    day range when you usually expect the next reading. Use your own area's schedule.
+                    Enter the last date your utility reader actually recorded
+                    the meter, and the day range when you usually expect the
+                    next reading. Use your own area's schedule.
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
-                      <label htmlFor="last-confirmed-reading" className="text-xs font-bold text-gray-500 dark:text-gray-400">
+                      <label
+                        htmlFor="last-confirmed-reading"
+                        className="text-xs font-bold text-gray-500 dark:text-gray-400"
+                      >
                         Last Confirmed Reading Date
                       </label>
                       <input
                         id="last-confirmed-reading"
-                        type="date"                
+                        type="date"
                         max={getPakistanToday()}
-                        value={electricityForm.readingSchedule.lastConfirmedReadingDate}
-                        onChange={(e) => updateReadingSchedule("lastConfirmedReadingDate", e.target.value)}
+                        value={
+                          electricityForm.readingSchedule
+                            .lastConfirmedReadingDate
+                        }
+                        onChange={(e) =>
+                          updateReadingSchedule(
+                            "lastConfirmedReadingDate",
+                            e.target.value,
+                          )
+                        }
                         className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 dark:text-white font-bold"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label htmlFor="expected-reading-from" className="text-xs font-bold text-gray-500 dark:text-gray-400">
+                      <label
+                        htmlFor="expected-reading-from"
+                        className="text-xs font-bold text-gray-500 dark:text-gray-400"
+                      >
                         Expected Reading: From Day
                       </label>
                       <input
                         id="expected-reading-from"
-                        type="number" min="1" max="31" step="1" placeholder="e.g. 20"
+                        type="number"
+                        min="1"
+                        max="31"
+                        step="1"
+                        placeholder="e.g. 20"
                         value={electricityForm.readingSchedule.expectedDayFrom}
-                        onChange={(e) => updateReadingSchedule("expectedDayFrom", e.target.value)}
+                        onChange={(e) =>
+                          updateReadingSchedule(
+                            "expectedDayFrom",
+                            e.target.value,
+                          )
+                        }
                         className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 dark:text-white font-bold"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label htmlFor="expected-reading-to" className="text-xs font-bold text-gray-500 dark:text-gray-400">
+                      <label
+                        htmlFor="expected-reading-to"
+                        className="text-xs font-bold text-gray-500 dark:text-gray-400"
+                      >
                         Expected Reading: To Day
                       </label>
                       <input
                         id="expected-reading-to"
-                        type="number" min="1" max="31" step="1" placeholder="e.g. 24"
+                        type="number"
+                        min="1"
+                        max="31"
+                        step="1"
+                        placeholder="e.g. 24"
                         value={electricityForm.readingSchedule.expectedDayTo}
-                        onChange={(e) => updateReadingSchedule("expectedDayTo", e.target.value)}
+                        onChange={(e) =>
+                          updateReadingSchedule("expectedDayTo", e.target.value)
+                        }
                         className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 dark:text-white font-bold"
                       />
                     </div>
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    For example, 20 to 24 means an expected reading between those dates each month.
-                    These settings are saved for now; predictions still use calendar months.
+                    For example, 20 to 24 means an expected reading between
+                    those dates each month. These settings are saved for now;
+                    predictions still use calendar months.
                   </p>
                   <button
                     type="button"
-                    onClick={() => setElectricityForm((previous) => ({
-                      ...previous,
-                      readingSchedule: { lastConfirmedReadingDate: "", expectedDayFrom: "", expectedDayTo: "" },
-                    }))}
+                    onClick={() =>
+                      setElectricityForm((previous) => ({
+                        ...previous,
+                        readingSchedule: {
+                          lastConfirmedReadingDate: "",
+                          expectedDayFrom: "",
+                          expectedDayTo: "",
+                        },
+                      }))
+                    }
                     className="text-sm text-brand-blue underline cursor-pointer"
                   >
                     Clear reading schedule
                   </button>
-                  <p className="text-xs text-gray-400">Use Save Changes below to save or clear these details.</p>
+                  <p className="text-xs text-gray-400">
+                    Use Save Changes below to save or clear these details.
+                  </p>
                 </fieldset>
               </div>
             )}
@@ -617,6 +702,18 @@ const Settings = () => {
             {/* --- APPLIANCES --- */}
             {activeTab === "appliances" && (
               <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
+                {applianceLoadError ? (
+                  <div role="alert" className="text-sm text-red-600 dark:text-red-400 space-y-2">
+                    <p>Could not load appliance profile. Saving is disabled to protect your existing details.</p>
+                    <button type="button" onClick={() => {
+                      applianceLoadedFor.current = null;
+                      setApplianceLoad({ status: "loading", userId: user?._id });
+                      setApplianceRetry((attempt) => attempt + 1);
+                    }} className="font-bold underline cursor-pointer">Retry</button>
+                  </div>
+                ) : !appliancesReady && (
+                  <p role="status" className="text-sm text-gray-500 dark:text-gray-400">Loading appliance profile... Please wait before saving.</p>
+                )}
                 {/* Cooling Section */}
                 <div>
                   <h4 className="text-sm font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -984,17 +1081,15 @@ const Settings = () => {
                   desc="Receive a notification when usage is close to the next slab."
                   active
                 />
-                <ToggleRow
-                  title="Peak Hour Reminder"
-                  desc="Reminder to turn off appliances at 6 PM."
-                  active
-                />
                 {electricityForm.meterType === "three" && (
-                  <ToggleRow
-                    title="MDI Overload Alert"
-                    desc="Get alerted when load exceeds 90% of the sanctioned load."
-                    active
-                  />
+                  <>
+                    <PeakReminderSetting />
+                    <ToggleRow
+                      title="MDI Overload Alert"
+                      desc="Get alerted when load exceeds 90% of the sanctioned load."
+                      active
+                    />
+                  </>
                 )}
                 <ToggleRow
                   title="Weekly Usage Report"
@@ -1066,7 +1161,7 @@ const Settings = () => {
           </div>
 
           {/* SAVE BUTTON — knows exactly which tab it's saving */}
-          {activeTab !== "device" && (
+          {activeTab !== "device" && activeTab !== "notifications" && (
             <div className="max-lg:mt-4 pt-4 border-t border-gray-50 dark:border-gray-800 flex justify-end">
               <button
                 onClick={
@@ -1078,7 +1173,7 @@ const Settings = () => {
                         ? saveAppliances
                         : savePassword
                 }
-                disabled={isSaving}
+                disabled={isSaving || (activeTab === "appliances" && !appliancesReady)}
                 className="bg-brand-gradient text-white px-10 py-4 rounded-full font-black flex items-center gap-3 hover:shadow-xl hover:-translate-y-1 transition active:scale-95 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0"
               >
                 {isSaving ? "Saving..." : "Save Changes"} <LuSave size={18} />

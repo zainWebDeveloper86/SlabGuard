@@ -1,109 +1,85 @@
-import React from "react";
-import { 
-  LuX, LuActivity, LuFileText, LuSmartphone, 
-  LuTrendingUp, LuHistory, LuShieldAlert 
-} from "react-icons/lu";
+import { useEffect, useState } from "react";
+import { LuX, LuRefreshCw } from "react-icons/lu";
+import { axiosServerInstance } from "../../axios.js";
+import ForecastPeriodDetails from "../Common/ForecastPeriodDetails";
+import { predictionPeriodLabel } from "../../utils/predictionPeriod.js";
 
-const UserDetailModal = ({ user, onClose }) => {
+const dateLabel = (value) => value ? new Date(value).toLocaleString("en-GB", { timeZone: "Asia/Karachi" }) + " PKT" : "Not recorded";
+
+export default function UserDetailModal({ user, ...props }) {
   if (!user) return null;
+  return <UserDetailContent key={user._id} user={user} {...props} />;
+}
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div 
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
-        onClick={onClose}
-      />
+function UserDetailContent({ user, onClose, onToggleStatus, statusBusy = false, currentAdminId }) {
+  const [detail, setDetail] = useState(null);
+  const [error, setError] = useState(null);
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    let active = true;
+    axiosServerInstance.get(`/admin/users/${user._id}`, { timeout: 10000 }).then(({ data }) => {
+      if (!data.success) throw new Error("Details unavailable");
+      if (active) { setDetail(data.detail); setError(null); }
+    }).catch(() => { if (active) setError("Could not load account details. Try again."); });
+    return () => { active = false; };
+  }, [user._id, retry]);
+  useEffect(() => {
+    const handleKey = (event) => { if (event.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onClose]);
 
-      {/* Modal Content */}
-      <div className="relative w-full max-w-4xl bg-white dark:bg-[#1E293B] rounded-[40px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
-        
-        {/* Header */}
-        <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/30">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-brand-gradient flex items-center justify-center text-white font-black text-xl">
-              {user.name[0]}
-            </div>
-            <div>
-              <h2 className="text-xl font-black dark:text-white italic">{user.name}</h2>
-              <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{user.role} • ID: {user.id}</p>
-            </div>
+  const profile = detail?.user ?? user;
+  const name = profile.fullName?.trim() || "Unnamed account";
+  const prediction = detail?.prediction;
+  const cell = "px-3 py-3 text-left";
+  return <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div className="absolute inset-0 bg-black/60" onClick={onClose} aria-hidden="true" />
+    <section role="dialog" aria-modal="true" aria-labelledby="user-detail-title" className="relative w-full max-w-4xl bg-white dark:bg-[#1E293B] rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-gray-800 dark:text-gray-200">
+      <header className="p-6 border-b border-gray-100 dark:border-gray-700 flex items-start justify-between gap-3">
+        <div className="min-w-0 flex gap-3 items-center">
+          <span className="rounded-2xl bg-brand-gradient text-white p-4 font-black">{name[0]}</span>
+          <div className="min-w-0"><h2 id="user-detail-title" className="text-xl font-black break-words">{name}</h2>
+            <p className="text-xs text-gray-500 break-all">{profile.role || "Role unavailable"} • ID: {profile._id || "Unavailable"}</p>
           </div>
-          <button 
-            onClick={onClose}
-            className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition cursor-pointer text-gray-500"
-          >
-            <LuX size={24} />
+        </div>
+        <button autoFocus onClick={onClose} aria-label="Close user details" className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700"><LuX size={22} /></button>
+      </header>
+      <div className="p-6 overflow-y-auto space-y-6">
+        <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <Info label="Email" value={profile.email || "Not provided"} />
+          <Info label="Reference No" value={profile.referenceNo || "Not linked"} />
+          <Info label="Meter Type" value={profile.meterType === "three" ? "Three phase" : profile.meterType === "single" ? "Single phase" : "Not recorded"} />
+          <Info label="Account status" value={user.isActive === true ? "Active" : user.isActive === false ? "Inactive" : "Unknown"} />
+          <Info label="Joined" value={dateLabel(profile.createdAt)} />
+          <Info label="Last bill sync" value={dateLabel(profile.lastSyncedAt)} />
+        </dl>
+        {error ? <div role="alert" className="text-amber-600"><p>{error}</p><button onClick={() => { setError(null); setRetry((n) => n + 1); }} className="mt-2 font-bold flex items-center gap-2"><LuRefreshCw /> Retry</button></div> : !detail ? <p role="status">Loading bills, prediction and readings...</p> : <>
+          <section><h3 className="font-black mb-3">Last recorded readings</h3>
+            <div className="grid sm:grid-cols-2 gap-4">{["simulator", "esp32"].map((source) => <div key={source} className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-900/40 text-sm">
+              <p className="font-bold uppercase">{source}</p>
+              {detail.readings[source] ? <><p>Reading hour: {dateLabel(detail.readings[source].hour)}</p><p>Received/updated: {dateLabel(detail.readings[source].updatedAt)}</p></> : <p>No readings received.</p>}
+            </div>)}</div><p className="text-xs text-gray-500 mt-2">A recorded reading does not confirm that a device is online now.</p>
+          </section>
+          <section><h3 className="font-black mb-3">Recent synced bills</h3>
+            {detail.bills.length ? <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr><th className={cell}>Month</th><th className={cell}>Units (kWh)</th><th className={cell}>Billed amount (Rs.)</th></tr></thead><tbody>{detail.bills.map((bill) => <tr key={bill.month} className="border-t border-gray-100 dark:border-gray-700"><td className={cell}>{bill.month}</td><td className={cell}>{bill.units}</td><td className={cell}>{bill.billAmount}</td></tr>)}</tbody></table></div> : <p className="text-sm text-gray-500">No synced billing history.</p>}
+          </section>
+          <section><h3 className="font-black">Saved prediction</h3>
+            {prediction ? <><p className="text-sm mt-2">{predictionPeriodLabel(prediction)}: <strong>Rs. {prediction.predictedBill}</strong> • {prediction.predictedUnits} kWh</p><ForecastPeriodDetails prediction={prediction} /><p className="text-xs text-gray-500 mt-2">Saved: {dateLabel(prediction.updatedAt)}. This is an estimate, separate from the billed amounts above.</p></> : <p className="text-sm text-gray-500 mt-2">No current saved prediction. Older periods or changed reading schedules require a fresh prediction.</p>}
+          </section>
+        </>}
+        <footer className="border-t border-gray-100 dark:border-gray-700 pt-4 space-y-2">
+          <button disabled={statusBusy || !onToggleStatus || currentAdminId === user._id || typeof user.isActive !== "boolean"} onClick={() => onToggleStatus(user._id)} className="rounded-xl px-5 py-3 bg-brand-blue text-white font-bold text-sm disabled:opacity-50">
+            {statusBusy ? "Updating..." : user.isActive ? "Deactivate account" : "Activate account"}
           </button>
-        </div>
-
-        {/* Body (Scrollable) */}
-        <div className="p-6 overflow-y-auto space-y-8">
-          
-          {/* 1. Quick Info Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <InfoBox icon={<LuFileText />} label="Reference No" value={user.refNo || "N/A"} />
-            <InfoBox icon={<LuTrendingUp />} label="Meter Type" value={user.phase === 'three' ? '3-Phase (MDI)' : 'Single Phase'} />
-            <InfoBox icon={<LuSmartphone />} label="Device" value="Android 14 • Chrome" />
-          </div>
-
-          {/* 2. Usage Stats & Analytics */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-gray-50 dark:bg-gray-900/50 p-6 rounded-[30px] border border-gray-100 dark:border-gray-800">
-              <h3 className="text-sm font-black dark:text-white mb-4 flex items-center gap-2">
-                <LuActivity className="text-brand-blue" /> Usage Prediction (SlabGuard AI)
-              </h3>
-              {/* Placeholder for Graph */}
-              <div className="h-40 w-full bg-white dark:bg-[#0B1220] rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 flex items-center justify-center">
-                <p className="text-xs text-gray-400 italic">Graph: Monthly Units vs Predictions</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h3 className="text-sm font-black dark:text-white flex items-center gap-2">
-                <LuHistory className="text-brand-blue" /> Recent OCR Logs
-              </h3>
-              {[1, 2].map((log) => (
-                <div key={log} className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-50 dark:border-gray-700">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center text-[10px] font-black">OCR</div>
-                    <span className="text-xs font-bold dark:text-gray-300">Bill_Sept_2025.jpg</span>
-                  </div>
-                  <span className="text-[10px] text-gray-400">12 Oct, 2025</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 3. Security Actions */}
-          <div className="pt-6 border-t border-gray-100 dark:border-gray-800">
-            <h3 className="text-sm font-black text-red-500 mb-4 flex items-center gap-2 italic">
-              <LuShieldAlert /> Restricted Actions
-            </h3>
-            <div className="flex flex-wrap gap-3">
-              <button className="px-5 py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-600 dark:text-gray-300 hover:text-red-500 rounded-xl text-xs font-bold transition">
-                Reset Password
-              </button>
-              <button className="px-5 py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-orange-50 dark:hover:bg-orange-900/20 text-gray-600 dark:text-gray-300 hover:text-orange-500 rounded-xl text-xs font-bold transition">
-                Suspend Account
-              </button>
-            </div>
-          </div>
-        </div>
+          {currentAdminId === user._id && <p className="text-xs text-gray-500">You cannot deactivate your own account.</p>}
+          <p className="text-xs text-gray-500">Password recovery is handled through the existing Forgot Password flow.</p>
+        </footer>
       </div>
-    </div>
-  );
-};
+    </section>
+  </div>;
+}
 
-// Helper Component
-const InfoBox = ({ icon, label, value }) => (
-  <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
-    <div className="flex items-center gap-2 text-gray-400 mb-1">
-      {React.cloneElement(icon, { size: 14 })}
-      <span className="text-[10px] font-black uppercase tracking-tighter">{label}</span>
-    </div>
-    <div className="text-sm font-bold dark:text-white">{value}</div>
-  </div>
-);
-
-export default UserDetailModal;
+function Info({ label, value }) {
+  return <div className="p-4 bg-gray-50 dark:bg-gray-900/40 rounded-2xl min-w-0"><dt className="text-xs text-gray-500 mb-1">{label}</dt><dd className="text-sm font-bold break-words">{value}</dd></div>;
+}

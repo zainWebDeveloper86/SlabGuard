@@ -1,6 +1,14 @@
 import Tariff from "../models/tariff.model.js";
+import { validPeakWindow } from "../utils/pakistanTime.js";
 import catchAsyncErrors from "../middleware/catchAsyncErrors.js";
 import ErrorHandler from "../utils/ErrorHandler.js";
+import { resolvePeakHours, validatePeakRevision } from "../../shared/peakSchedule.js";
+import { recordSystemEvent } from "../services/systemEvents.service.js";
+
+const tariffResponse = (tariff) => {
+  const data = tariff.toObject ? tariff.toObject() : tariff;
+  return { ...data, currentPeakHours: resolvePeakHours(data) };
+};
 
 // Stored here only as the DB's first-run default — after that, the database is the source of truth, and admin edits persist there.
 
@@ -44,7 +52,7 @@ export const getTariff = catchAsyncErrors(async (req, res, next) => {
   if (!tariff) {
     tariff = await Tariff.create(DEFAULT_TARIFF); // first-ever call seeds the DB
   }
-  res.status(200).json({ success: true, tariff });
+  res.status(200).json({ success: true, tariff: tariffResponse(tariff) });
 });
 
 // Partial update — send only the section(s) you're changing (protectedSlabs, nonProtectedSlabs, fixedCharges, and/or taxes)
@@ -56,6 +64,13 @@ export const updateTariff = catchAsyncErrors(async (req, res, next) => {
   let tariff = await Tariff.findOne();
   // console.log("tariff: ", tariff);
   if (!tariff) tariff = new Tariff(DEFAULT_TARIFF);
+  if (Object.hasOwn(req.body, "peakSchedule")) {
+    try {
+      tariff.peakScheduleVersions = validatePeakRevision(
+        tariff.toObject ? tariff.toObject() : tariff, req.body.peakSchedule,
+      );
+    } catch (error) { return next(new ErrorHandler(error.message, 400)); }
+  }
 
   const editableFields = [
     "lifelineSlabs",
@@ -74,24 +89,27 @@ export const updateTariff = catchAsyncErrors(async (req, res, next) => {
   // its own validation (hours must be 0-23, multiplier must be positive)
   if (req.body.peakHours && typeof req.body.peakHours === "object") {
     const { startHour, endHour, rateMultiplier } = req.body.peakHours;
-    const validHours =
-      typeof startHour === "number" &&
-      startHour >= 0 &&
-      startHour <= 23 &&
-      typeof endHour === "number" &&
-      endHour >= 0 &&
-      endHour <= 23;
+    const validHours = validPeakWindow({ startHour, endHour });
     const validMultiplier =
-      typeof rateMultiplier === "number" && rateMultiplier > 0;
+      Number.isFinite(rateMultiplier) && rateMultiplier > 0;
 
     if (!validHours || !validMultiplier) {
       return next(new ErrorHandler("Invalid peak hours values", 400));
+    }
+    if (tariff.peakScheduleVersions?.length &&
+        (startHour !== tariff.peakHours?.startHour || endHour !== tariff.peakHours?.endHour)) {
+      return next(new ErrorHandler("Use a dated seasonal schedule revision to change peak timings", 400));
     }
     tariff.peakHours = { startHour, endHour, rateMultiplier };
   }
 
   tariff.lastUpdatedBy = req.user._id;
-  await tariff.save({ validateModifiedOnly: true });
+  try { await tariff.save({ validateModifiedOnly: true }); }
+  catch (error) {
+    if (error.name === "VersionError") return next(new ErrorHandler("Tariff changed in another session. Reload and retry.", 409));
+    throw error;
+  }
 
-  res.status(200).json({ success: true, message: "Tariff updated", tariff });
+  void recordSystemEvent("tariff.updated", { actorId: req.user._id });
+  res.status(200).json({ success: true, message: "Tariff updated", tariff: tariffResponse(tariff) });
 });
