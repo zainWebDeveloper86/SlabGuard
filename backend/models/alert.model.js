@@ -13,6 +13,10 @@ const alertSchema = new mongoose.Schema(
     desc: { type: String, required: true },
     isRead: { type: Boolean, default: false },
     source: { type: String, enum: ["system", "broadcast"], default: "system" },
+    kind: { type: String, enum: ["peak-reminder"], default: undefined },
+    // Retain a dismissed reminder as a delivery receipt, so the next scheduler
+    // tick cannot recreate a notification the user has already deleted.
+    dismissedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );

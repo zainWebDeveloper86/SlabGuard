@@ -3,6 +3,8 @@ import BillHistory from "../models/billHistory.model.js";
 import Tariff from "../models/tariff.model.js";
 import catchAsyncErrors from "../middleware/catchAsyncErrors.js";
 import ErrorHandler from "../utils/ErrorHandler.js";
+import { ADMIN_USER_FIELDS } from "./adminMonitoring.controller.js";
+import { recordSystemEvent } from "../services/systemEvents.service.js";
 
 // Fine for our current user count, can be optimized later once we're comfortable with aggregation.
 
@@ -92,7 +94,7 @@ export const getAdminStats = catchAsyncErrors(async (req, res, next) => {
 });
 
 export const getAllUsersAdmin = catchAsyncErrors(async (req, res, next) => {
-  const users = await User.find({}).select("-password").sort({ createdAt: -1 });
+  const users = await User.find({}).select(ADMIN_USER_FIELDS).sort({ createdAt: -1 });
   res.status(200).json({ success: true, users });
 });
 
@@ -107,11 +109,12 @@ export const toggleUserStatus = catchAsyncErrors(async (req, res, next) => {
 
   user.isActive = !user.isActive;
   await user.save();
+  void recordSystemEvent(user.isActive ? "user.activated" : "user.deactivated", { actorId: req.user._id, subjectId: user._id });
 
   res.status(200).json({
     success: true,
     message: `User ${user.isActive ? "activated" : "deactivated"}`,
-    user,
+    user: Object.fromEntries(["_id", ...ADMIN_USER_FIELDS.split(" ")].map((key) => [key, user[key]])),
   });
 });
 

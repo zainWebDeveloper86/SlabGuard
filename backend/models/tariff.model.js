@@ -45,9 +45,19 @@ const tariffSchema = new mongoose.Schema(
     fixedCharges: [fixedChargeSchema],
     taxes: [taxRowSchema],
     peakHours: { type: peakHoursSchema },
+    peakScheduleVersions: {
+      type: [new mongoose.Schema({
+        effectiveFrom: { type: String, required: true },
+        months: { type: [new mongoose.Schema({
+          month: { type: Number, required: true, min: 1, max: 12 },
+          startHour: { type: Number, required: true, min: 0, max: 23 },
+          endHour: { type: Number, required: true, min: 0, max: 23 },
+        }, { _id: false })], required: true },
+      }, { _id: false })], default: undefined,
+    },
     lastUpdatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
-  { timestamps: true },
+  { timestamps: true, optimisticConcurrency: true },
 );
 
 export default mongoose.model("Tariff", tariffSchema);

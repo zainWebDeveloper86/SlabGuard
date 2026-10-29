@@ -10,6 +10,7 @@ import sendMail from "../utils/sendMail.js";
 import jwt from "jsonwebtoken";
 import { normalizeReadingSchedule } from "../utils/readingSchedule.js";
 import { normalizeWeatherLocation } from "../utils/weatherLocation.js";
+import { recordSystemEvent } from "../services/systemEvents.service.js";
 
 
 // =============================================
@@ -40,6 +41,7 @@ export const registerUser = catchAsyncErrors(async (req, res, next) => {
     role: "user",
   });
 
+  void recordSystemEvent("user.registered", { actorId: newUser._id });
   sendToken(newUser, 201, res);
 });
 

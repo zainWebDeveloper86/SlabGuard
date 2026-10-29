@@ -111,6 +111,7 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
     readingSchedule: { type: readingScheduleSchema, default: () => ({}) },
+    peakHourReminderEnabled: { type: Boolean, default: false },
     deviceApiKey: {
       type: String,
       unique: true,

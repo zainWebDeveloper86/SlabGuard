@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   LuBell,
   LuTriangleAlert,
@@ -10,26 +10,52 @@ import {
 } from "react-icons/lu";
 import toast from "react-hot-toast";
 import { axiosServerInstance } from "../../axios.js";
+import { useAuth } from "../../hooks/useAuth";
 
 const Alerts = () => {
+  const { user } = useAuth();
+  return <AlertsList key={user?._id ?? "guest"} />;
+};
+
+const AlertsList = () => {
   const [alerts, setAlerts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("all");
-
-  const fetchAlerts = async () => {
-    try {
-      const res = await axiosServerInstance.get("/alerts/me");
-      if (res.data.success) setAlerts(res.data.alerts);
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to load alerts");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const [loadError, setLoadError] = useState("");
+  const [retry, setRetry] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+  const requestVersion = useRef(0);
+  const mutations = useRef(0);
+  const mounted = useRef(false);
 
   useEffect(() => {
-    fetchAlerts();
+    mounted.current = true;
+    return () => { mounted.current = false; };
   }, []);
+
+  useEffect(() => {
+    let ignore = false, inFlight = false;
+    const fetchAlerts = async () => {
+      if (inFlight || mutations.current) return;
+      inFlight = true;
+      const version = ++requestVersion.current;
+      try {
+        const res = await axiosServerInstance.get("/alerts/me");
+        if (ignore || version !== requestVersion.current) return;
+        if (!res.data?.success || !Array.isArray(res.data.alerts)) throw new Error("Invalid alerts response");
+        setAlerts(res.data.alerts); setLoadError("");
+        setNow(Date.now());
+      } catch {
+        if (!ignore && version === requestVersion.current) setLoadError("Could not refresh alerts. Please retry.");
+      } finally {
+        inFlight = false;
+        if (!ignore) setIsLoading(false);
+      }
+    };
+    fetchAlerts();
+    const timer = setInterval(fetchAlerts, 30000);
+    return () => { ignore = true; clearInterval(timer); };
+  }, [retry]);
 
   const filteredAlerts = alerts.filter((alert) => {
     if (activeTab === "critical") return alert.type === "critical";
@@ -38,30 +64,36 @@ const Alerts = () => {
   });
 
   const markAsRead = async (id) => {
+    mutations.current++; requestVersion.current++;
     try {
       await axiosServerInstance.patch(`/alerts/${id}/read`);
-      setAlerts(alerts.map((a) => (a._id === id ? { ...a, isRead: true } : a)));
-    } catch (error) {
-      toast.error("Failed to mark as read");
-    }
+      if (!mounted.current) return;
+      setAlerts((previous) => previous.map((a) => (a._id === id ? { ...a, isRead: true } : a)));
+    } catch {
+      if (mounted.current) toast.error("Failed to mark as read");
+    } finally { mutations.current--; requestVersion.current++; }
   };
 
   const deleteAlert = async (id) => {
+    mutations.current++; requestVersion.current++;
     try {
       await axiosServerInstance.delete(`/alerts/${id}`);
-      setAlerts(alerts.filter((a) => a._id !== id));
-    } catch (error) {
-      toast.error("Failed to delete alert");
-    }
+      if (!mounted.current) return;
+      setAlerts((previous) => previous.filter((a) => a._id !== id));
+    } catch {
+      if (mounted.current) toast.error("Failed to delete alert");
+    } finally { mutations.current--; requestVersion.current++; }
   };
 
   const clearAll = async () => {
+    mutations.current++; requestVersion.current++;
     try {
       await axiosServerInstance.delete("/alerts");
+      if (!mounted.current) return;
       setAlerts([]);
-    } catch (error) {
-      toast.error("Failed to clear alerts");
-    }
+    } catch {
+      if (mounted.current) toast.error("Failed to clear alerts");
+    } finally { mutations.current--; requestVersion.current++; }
   };
 
   const getIcon = (type) => {
@@ -76,13 +108,14 @@ const Alerts = () => {
   };
 
   const timeAgo = (dateStr) => {
-    const diffMs = Date.now() - new Date(dateStr).getTime();
+    const diffMs = now - new Date(dateStr).getTime();
     const mins = Math.floor(diffMs / 60000);
     if (mins < 1) return "Just now";
     if (mins < 60) return `${mins} mins ago`;
     const hrs = Math.floor(mins / 60);
     if (hrs < 24) return `${hrs} hour${hrs > 1 ? "s" : ""} ago`;
     return new Date(dateStr).toLocaleDateString("en-GB", {
+      timeZone: "Asia/Karachi",
       day: "2-digit",
       month: "short",
     });
@@ -98,6 +131,7 @@ const Alerts = () => {
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
+      {loadError && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{loadError}{" "}<button type="button" onClick={() => setRetry((value) => value + 1)} className="underline cursor-pointer">Retry</button></p>}
       <div className="flex justify-between items-end">
         <div>
           <h1 className="text-3xl font-black text-gray-900 dark:text-white flex items-center gap-3">
@@ -191,10 +225,10 @@ const Alerts = () => {
             </div>
             <div>
               <h3 className="text-xl font-black dark:text-white">
-                All caught up!
+                {loadError ? "Alerts unavailable" : "All caught up!"}
               </h3>
               <p className="text-gray-500 font-medium italic">
-                No new alerts at the moment.
+                {loadError ? "Retry to load your notifications." : "No new alerts at the moment."}
               </p>
             </div>
           </div>

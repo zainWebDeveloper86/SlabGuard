@@ -1,4 +1,5 @@
 import ErrorHandler from "../utils/ErrorHandler.js";
+import { recordSystemEvent } from "../services/systemEvents.service.js";
 
 export default (err, req, res, next) => {
   err.statusCode = err.statusCode || 500;
@@ -28,6 +29,11 @@ export default (err, req, res, next) => {
     err = new ErrorHandler(message, 400);
   }
 
+  // Exclude monitoring routes to avoid recording a new event each time a
+  // failing log viewer polls. Other 5xx failures get a predefined message.
+  if (err.statusCode >= 500 && !/^\/api\/admin\/(logs|health)(\/|$)/.test(req.originalUrl?.split("?")[0] ?? "")) {
+    void recordSystemEvent("request.failed", { actorId: req.user?._id });
+  }
   res.status(err.statusCode).json({
     success: false,
     message: err.message,

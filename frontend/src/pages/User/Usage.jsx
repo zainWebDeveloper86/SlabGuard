@@ -24,6 +24,7 @@ import {
 import toast from "react-hot-toast";
 import { axiosServerInstance } from "../../axios.js";
 import { useAuth } from "../../hooks/useAuth.js"; // ✅ ADDED
+import { formatPeakHours } from "../../../../shared/peakSchedule.js";
 
 const PendingBadge = ({ note }) => (
   <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest bg-gray-100 dark:bg-gray-800 text-gray-400 px-2 py-1 rounded-full border border-dashed border-gray-300 dark:border-gray-700">
@@ -39,7 +40,7 @@ const SourceBadge = ({ note }) => (
 
 const formatDateLabel = (isoDate) => {
   const d = new Date(isoDate);
-  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+  return d.toLocaleDateString("en-GB", { timeZone: "Asia/Karachi", day: "2-digit", month: "short" });
 };
 
 const Usage = () => {
@@ -48,10 +49,13 @@ const Usage = () => {
   const [dailyUsage, setDailyUsage] = useState([]);
   const [threshold, setThreshold] = useState(200);
   const [hourlyData, setHourlyData] = useState([]);
+  const [selectedPeakHours, setSelectedPeakHours] = useState(null);
   const [isHourlyLoading, setIsHourlyLoading] = useState(true);
   const [hourlyError, setHourlyError] = useState(null);
   const [hourlyRetry, setHourlyRetry] = useState(0);
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(() => new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Karachi", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date()));
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -91,13 +95,14 @@ const Usage = () => {
       setHourlyData([]);
       try {
         const res = await axiosServerInstance.get("/usage/hourly/me", {
-          params: { date: selectedDate.toISOString().slice(0, 10) },
+          params: { date: selectedDate },
         });
         if (ignore) return;
         if (!res.data.success || !Array.isArray(res.data.hourlyData)) {
           throw new Error("Failed to load hourly readings. Please try again.");
         }
         setHourlyData(res.data.hourlyData);
+        setSelectedPeakHours(res.data.peakHours ?? null);
       } catch {
         if (!ignore) {
           setHourlyError("Could not load hourly readings. Please try again.");
@@ -359,18 +364,19 @@ const Usage = () => {
           <div className="flex items-center gap-2">
             <input
               type="date"
-              value={selectedDate.toISOString().slice(0, 10)}
+              value={selectedDate}
               onChange={(e) => {
-                if (!e.target.value) return;
+                if (!e.target.value || e.target.value === selectedDate) return;
                 setHourlyData([]);
+                setSelectedPeakHours(null);
                 setHourlyError(null);
                 setIsHourlyLoading(true);
-                setSelectedDate(new Date(e.target.value));
+                setSelectedDate(e.target.value);
               }}
               className="bg-gray-200 rounded-lg px-3 py-1 text-sm font-bold border-none outline-none"
             />
             <span className="text-[10px] text-gray-400">
-              Peak hours: 6 PM – 10 PM
+              {user?.meterType === "three" ? `Saved window: ${formatPeakHours(selectedPeakHours)}` : "Pakistan time"}
             </span>
           </div>
         </div>
@@ -419,7 +425,7 @@ const Usage = () => {
                 {hourlyData.map((entry, index) => (
                   <Cell
                     key={index}
-                    fill={index >= 18 && index <= 22 ? "#f59e0b" : "#3b82f6"}
+                    fill={user?.meterType === "three" && entry.isPeak === true ? "#f59e0b" : "#3b82f6"}
                   />
                 ))}
               </Bar>
@@ -433,10 +439,10 @@ const Usage = () => {
             {" "}Missing hours have no reading; 0 kWh means a recorded zero.
           </p>
         )}
-        <p className="text-xs text-gray-400 mt-4 text-center">
+        {user?.meterType === "three" && <p className="text-xs text-gray-400 mt-4 text-center">
           <span className="inline-block w-3 h-3 bg-amber-500 rounded-full mr-1"></span>
-          Peak hours (6 PM – 10 PM) — rates are higher
-        </p>
+          Amber bars use the saved peak schedule for the selected Pakistan date.
+        </p>}
       </div>
 
       {/* PEAK HOURS INFO BOX — Sirf Three-Phase Users Ke Liye */}
@@ -445,7 +451,7 @@ const Usage = () => {
           <LuInfo className="text-amber-500 animate-pulse" size={20} />
           <p className="text-xs md:text-sm font-medium text-amber-800 dark:text-amber-400">
             <span className="font-black underline">MEPCO Peak Hours:</span>{" "}
-            Current timings are <strong>06:00 PM to 10:00 PM</strong>. Avoid
+            Window for the selected date: <strong>{formatPeakHours(selectedPeakHours)}</strong>. Overnight periods can carry over from the previous day. Avoid
             using heavy appliances (AC, Motors) during this window to reduce
             cost.
           </p>

@@ -10,6 +10,7 @@ import {
   LuShieldCheck,
   LuRefreshCw,
   LuSparkles,
+  LuClock,
 } from "react-icons/lu";
 import {
   BarChart,
@@ -24,6 +25,8 @@ import {
 import toast from "react-hot-toast";
 import { axiosServerInstance } from "../../axios.js";
 import BudgetGoalCard from "../../components/Common/BudgetGoalCard";
+import ForecastPeriodDetails from "../../components/Common/ForecastPeriodDetails";
+import { predictionPeriodLabel } from "../../utils/predictionPeriod.js";
 
 const PendingBadge = ({ note }) => (
   <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest bg-gray-100 dark:bg-gray-800 text-gray-400 px-2 py-1 rounded-full border border-dashed border-gray-300 dark:border-gray-700">
@@ -37,30 +40,31 @@ const PredictionBill = () => {
   const [threshold, setThreshold] = useState(200);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [predictionNotice, setPredictionNotice] = useState(null);
 
-  const loadPrediction = async () => {
-    try {
-      const [predRes, tariffRes] = await Promise.all([
-        axiosServerInstance.get("/prediction/me"),
-        axiosServerInstance.get("/tariff"),
-      ]);
-
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      axiosServerInstance.get("/prediction/me"),
+      axiosServerInstance.get("/tariff"),
+    ]).then(([predRes, tariffRes]) => {
+      if (!active) return;
       if (predRes.data.success && predRes.data.hasPrediction) {
         setPrediction(predRes.data.prediction);
+      } else if (predRes.data.success) {
+        setPrediction(null);
+        setPredictionNotice(predRes.data.message);
       }
       if (tariffRes.data.success) {
         const slabs = tariffRes.data.tariff.protectedSlabs;
         if (slabs?.length) setThreshold(slabs[slabs.length - 1].rangeTo);
       }
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to load prediction");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadPrediction();
+    }).catch((error) => {
+      if (active) toast.error(error.response?.data?.message || "Failed to load prediction");
+    }).finally(() => {
+      if (active) setIsLoading(false);
+    });
+    return () => { active = false; };
   }, []);
 
   const handleGenerate = async () => {
@@ -69,6 +73,7 @@ const PredictionBill = () => {
       const res = await axiosServerInstance.post("/prediction/generate");
       if (res.data.success) {
         setPrediction(res.data.prediction);
+        setPredictionNotice(null);
         toast.success("Prediction updated!");
       }
     } catch (error) {
@@ -134,6 +139,8 @@ const PredictionBill = () => {
         </button>
       </div>
 
+      {predictionNotice && <p role="status" className="text-sm text-amber-600 dark:text-amber-400">{predictionNotice}</p>}
+
       {!prediction ? (
         <>
         <div className="bg-white dark:bg-[#1E293B] rounded-[40px] border border-dashed border-gray-200 dark:border-gray-800 p-12 text-center">
@@ -155,7 +162,7 @@ const PredictionBill = () => {
               <div className="absolute inset-0 bg-white/5 backdrop-blur-[2px]" />
               <div className="relative z-10">
                 <span className="bg-white/20 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest">
-                  {prediction.projection ? "Estimated Calendar-Month Bill" : "Estimated Bill"}
+                  {predictionPeriodLabel(prediction)}
                 </span>
 
                 <div className="mt-6 flex items-end gap-2">
@@ -174,15 +181,14 @@ const PredictionBill = () => {
 
                 {prediction.projection && (
                   <div className="mt-3 text-xs text-blue-100 space-y-1">
-                    <p>{prediction.projection.startDate} to {prediction.projection.endDate} (Pakistan time)</p>
                     <p>{prediction.projection.observedDays} complete days recorded; {prediction.projection.estimatedDays} days estimated.</p>
                     <p>{prediction.projection.actualUnits} kWh recorded + {prediction.projection.estimatedUnits} kWh estimated.</p>
                     {prediction.projection.estimatedPastDays > 0 && (
                       <p>{prediction.projection.estimatedPastDays} past days have missing or incomplete readings and are estimated.</p>
                     )}
-                    <p>Calendar-month projection; actual meter-reading cycle alignment is pending.</p>
                   </div>
                 )}
+                <ForecastPeriodDetails prediction={prediction} />
 
                 {/* <div className="mt-4 text-xs text-blue-100">
                   Confidence:{" "}

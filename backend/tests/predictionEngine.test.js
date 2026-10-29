@@ -6,7 +6,8 @@ import BillHistory from "../models/billHistory.model.js";
 import Prediction from "../models/prediction.model.js";
 import Tariff from "../models/tariff.model.js";
 import User from "../models/user.model.js";
-import { generatePrediction } from "../controllers/prediction.controller.js";
+import { generatePrediction, getMyPrediction } from "../controllers/prediction.controller.js";
+import { getBillingSummary } from "../controllers/billHistory.controller.js";
 import { DEFAULT_TARIFF } from "../controllers/tariff.controller.js";
 import { predictCurrentMonthProjection, predictNextMonthUnits } from "../services/predictionEngine.service.js";
 
@@ -53,6 +54,29 @@ test("stale history still estimates all unrecorded days through month-end", asyn
   assert.equal(result.projection.estimatedPastDays, 9);
   assert.equal(result.projection.forecastDays, 12);
 });
+
+for (const [label, actualDaily, estimatedDaily, finalEstimate, actual, estimated, expected] of [
+  ["below half a unit", 2.14, 7.32, 7.31, 40.66, 87.83, 128],
+  ["exactly half a unit", 2.14, 7.32, 7.32, 40.66, 87.84, 129],
+  ["above half a unit", 2.14, 7.32, 7.33, 40.66, 87.85, 129],
+  ["small decimal readings", 0.02, 0.26, 0.26, 0.38, 3.12, 4],
+  ["recorded and estimated zero", 0, 0, 0, 0, 0, 0],
+]) {
+  test(`rounds the complete-period total correctly: ${label}`, async (t) => {
+    setup(t, october().map((record) => ({ ...record, totalUnits: actualDaily })),
+      (points) => points.map((point, index) => {
+        const value = index === points.length - 1 ? finalEstimate : estimatedDaily;
+        return { ...point, yhat: value, yhat_lower: 0, yhat_upper: value + 1 };
+      }));
+    const result = await predictCurrentMonthProjection("user", now);
+    assert.equal(result.predictedUnits, expected);
+    assert.equal(result.projection.actualUnits, actual);
+    assert.equal(result.projection.estimatedUnits, estimated);
+    assert.equal(result.projection.observedDays, 19);
+    assert.equal(result.projection.estimatedDays, 12);
+    assert.ok(Number.isFinite(result.confidence));
+  });
+}
 
 test("a missing historical day is estimated rather than silently omitted", async (t) => {
   setup(t, october().filter((_, i) => i !== 4));
@@ -133,13 +157,13 @@ test("Python failure allows the existing monthly-history fallback", async (t) =>
   assert.equal(fallback.predictedUnits, 167);
 });
 
-function generate() {
+function generate(readingSchedule) {
   return new Promise((resolve, reject) => {
     const res = {
       status(code) { this.code = code; return this; },
       json(data) { resolve({ status: this.code, data }); },
     };
-    generatePrediction({ user: { _id: "user" } }, res, reject);
+    generatePrediction({ user: { _id: "user", readingSchedule } }, res, reject);
   });
 }
 
@@ -156,6 +180,68 @@ test("controller persists the projection dates, coverage and training days", asy
   assert.equal(data.prediction.daysUsed, 19);
   assert.equal(data.prediction.projection.endDate, "2026-10-31");
   assert.equal(data.prediction.projection.estimatedDays, 12);
+});
+
+const readingSchedule = { lastConfirmedReadingDate: "2026-09-22", expectedDayFrom: 20, expectedDayTo: 24 };
+
+test("cycle forecasts cross calendar boundaries and exclude confirmed reading day", async (t) => {
+  const request = setup(t, [daily("2026-09-22", 999), daily("2026-09-23", 0), ...october()]);
+  const result = await predictCurrentMonthProjection("user", now, readingSchedule);
+  // Sep 23 zero + Oct 1–19 at 2/day; 12 other days estimated at 10/day.
+  assert.equal(result.predictedUnits, 158);
+  assert.equal(result.projection.observedDays, 20);
+  assert.equal(result.projection.actualUnits, 38);
+  assert.equal(result.projection.estimatedDays, 12);
+  assert.equal(result.projection.estimatedPastDays, 7);
+  const body = request.mock.calls[0].arguments[1];
+  assert.equal(body.forecast_start, "2026-09-23");
+  assert.equal(body.forecast_end, "2026-10-24");
+  assert.equal(body.days_to_forecast, 32);
+});
+
+test("cycle repeated forecasts do not add old totals; a late complete day replaces an estimate", async (t) => {
+  const records = october();
+  setup(t, records);
+  const first = await predictCurrentMonthProjection("user", now, readingSchedule);
+  assert.equal((await predictCurrentMonthProjection("user", now, readingSchedule)).predictedUnits, first.predictedUnits);
+  records.push(daily("2026-09-23", 3));
+  assert.equal((await predictCurrentMonthProjection("user", now, readingSchedule)).predictedUnits, first.predictedUnits - 7);
+});
+
+function invoke(handler, user) {
+  return new Promise((resolve, reject) => handler({ user }, {
+    status() { return this; }, json: resolve,
+  }, reject));
+}
+
+test("saved cycle survives reload and dashboard while calendar actual totals stay separate", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: now.getTime() });
+  setup(t, october());
+  t.mock.method(Tariff, "findOne", async () => DEFAULT_TARIFF);
+  t.mock.method(User, "findById", async () => ({ meterType: "single", sanctionedLoad: 0 }));
+  t.mock.method(BillHistory, "find", () => ({ sort: () => ({ limit: async () => [] }) }));
+  t.mock.method(BillHistory, "findOne", () => ({ sort: async () => null }));
+  const writes = [];
+  t.mock.method(Prediction, "findOneAndUpdate", async (filter, update) => { writes.push(filter); return update.$set; });
+  const { data } = await generate(readingSchedule);
+  assert.equal(data.prediction.month, "cycle:2026-09-23:2026-10-20:2026-10-24");
+  assert.equal(data.prediction.projection.periodType, "reading-cycle");
+  const user = { _id: "user", readingSchedule };
+  const read = t.mock.method(Prediction, "findOne", () => ({ sort: async () => data.prediction }));
+  const reloaded = await invoke(getMyPrediction, user);
+  assert.equal(reloaded.hasPrediction, true);
+  assert.equal(read.mock.calls[0].arguments[0].user, "user");
+  t.mock.method(DailyUsage, "find", async (filter) => {
+    assert.equal(filter.date.$gte.toISOString(), "2026-09-30T19:00:00.000Z");
+    return october();
+  });
+  const dashboard = await invoke(getBillingSummary, user);
+  assert.equal(dashboard.liveMonth.actualUnitsSoFar, 38);
+  assert.equal(dashboard.liveMonth.prediction.month, data.prediction.month);
+  const changed = { ...user, readingSchedule: { ...readingSchedule, expectedDayTo: 25 } };
+  assert.equal((await invoke(getMyPrediction, changed)).hasPrediction, false);
+  assert.equal((await invoke(getBillingSummary, changed)).liveMonth.prediction, null);
+  assert.equal(writes.length, 1); // read endpoints never trigger forecasting/writes
 });
 
 test("monthly fallback clears calendar-projection metadata", async (t) => {

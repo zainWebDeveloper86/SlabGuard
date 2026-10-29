@@ -3,6 +3,13 @@ import axios from "axios";
 
 const PROPHET_SERVICE_URL = process.env.PROPHET_SERVICE_URL || "http://localhost:8000";
 
+export async function checkProphetHealth() {
+  try {
+    const response = await axios.get(`${PROPHET_SERVICE_URL}/health`, { timeout: 3000 });
+    return response.data?.status === "ok" ? "reachable" : "unavailable";
+  } catch { return "unavailable"; }
+}
+
 // Thin wrapper around the Python microservice — keeps the HTTP details
 // (URL, timeout) in one place, not scattered across the prediction engine.
 export async function callProphetService(history, daysToForecast, { forecastStart, forecastEnd } = {}) {

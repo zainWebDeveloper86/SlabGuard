@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import { startNightlyAggregationJob } from "./jobs/nightlyAggregation.job.js";
+import { startPeakReminderJob } from "./jobs/peakReminder.job.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -9,6 +10,7 @@ import app from "./app.js";
 import connectDB from "./config/database.js";
 import Tariff from "./models/tariff.model.js"
 import { DEFAULT_TARIFF } from "./controllers/tariff.controller.js";
+import { recordSystemEvent } from "./services/systemEvents.service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,7 +27,7 @@ const seedTariff = async () => {
   const existing = await Tariff.findOne();
   if (!existing) {
     await Tariff.create(DEFAULT_TARIFF);
-    console.log("✅ Tariff seeded successfully");
+    console.log("Tariff seeded successfully");
   }
 };
 
@@ -44,11 +46,17 @@ const startServer = async () => {
     }
 
     const PORT = process.env.PORT || 8080;
-    app.listen(PORT, () => {
+    app.listen(PORT, (error) => {
+      if (error) {
+        console.log("Server startup failed:", error.message);
+        process.exit(1);
+        return;
+      }
+      void recordSystemEvent("server.started");
       console.log(`Server is running on http://localhost:${PORT}`);
+      startNightlyAggregationJob();
+      startPeakReminderJob();
     });
-
-    startNightlyAggregationJob();
   } catch (error) {
     console.log("Server startup failed:", error.message);
     process.exit(1);

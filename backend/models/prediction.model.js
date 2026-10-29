@@ -17,6 +17,7 @@ const predictionSchema = new mongoose.Schema(
     monthsUsed: { type: Number },
     daysUsed: { type: Number },
     projection: { type: mongoose.Schema.Types.Mixed, default: null },
+    forecastContext: { type: mongoose.Schema.Types.Mixed, default: null },
   },
   { timestamps: true },
 );
